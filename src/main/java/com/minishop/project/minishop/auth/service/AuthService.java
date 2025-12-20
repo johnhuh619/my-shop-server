@@ -1,5 +1,6 @@
 package com.minishop.project.minishop.auth.service;
 
+import com.minishop.project.minishop.auth.domain.TokenPayload;
 import com.minishop.project.minishop.auth.dto.LoginResponse;
 import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
@@ -34,5 +35,9 @@ public class AuthService {
         String accessToken = tokenService.issueToken(user.getId());
 
         return LoginResponse.of(accessToken, user.getId(), user.getEmail(), user.getName());
+    }
+
+    public TokenPayload validateToken(String token) {
+        return tokenService.validateAccessToken(token);
     }
 }

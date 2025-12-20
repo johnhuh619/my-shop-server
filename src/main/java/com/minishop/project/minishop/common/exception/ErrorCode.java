@@ -12,6 +12,7 @@ public enum ErrorCode {
 
     // Auth
     INVALID_CREDENTIALS("A001", "Invalid email or password"),
+    INVALID_TOKEN("A002", "Invalid or expired token"),
 
     // Product
     PRODUCT_NOT_FOUND("P001", "Product not found"),

@@ -1,5 +1,8 @@
 package com.minishop.project.minishop.auth.service;
 
+import com.minishop.project.minishop.auth.domain.TokenPayload;
+import com.minishop.project.minishop.common.exception.BusinessException;
+import com.minishop.project.minishop.common.exception.ErrorCode;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -56,6 +59,24 @@ public class TokenService {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    public TokenPayload validateAccessToken(String token) {
+        try {
+            Claims claims = parseClaims(token);
+            TokenPayload payload = TokenPayload.of(
+                    Long.parseLong(claims.getSubject()),
+                    claims.getIssuedAt().toInstant(),
+                    claims.getExpiration().toInstant()
+            );
+
+            if (payload.isExpired()){
+                throw new BusinessException(ErrorCode.INVALID_TOKEN);
+            }
+            return payload;
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
     }
 
