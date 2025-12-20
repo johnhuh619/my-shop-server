@@ -105,9 +105,9 @@ com.minishop.project.minishop
 
 ### 4.4 Repository
 
-| 접근 가능 | 접근 금지 |
-|-----------|----------|
-| domain | controller, service, dto |
+| 접근 가능                                            | 접근 금지           |
+|--------------------------------------------------|-----------------|
+| domain, Spring Data JPA(JpaRepository, @Query 등) | controller, dto |
 
 ---
 
