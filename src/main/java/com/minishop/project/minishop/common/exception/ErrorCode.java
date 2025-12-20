@@ -7,6 +7,7 @@ public enum ErrorCode {
 
     // User
     USER_NOT_FOUND("U001", "User not found"),
+    DUPLICATE_EMAIL("U002", "Email already exists"),
 
     // Product
     PRODUCT_NOT_FOUND("P001", "Product not found"),
