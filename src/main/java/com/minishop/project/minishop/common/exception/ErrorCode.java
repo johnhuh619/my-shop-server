@@ -8,6 +8,10 @@ public enum ErrorCode {
     // User
     USER_NOT_FOUND("U001", "User not found"),
     DUPLICATE_EMAIL("U002", "Email already exists"),
+    USER_INACTIVE("U003", "User is inactive"),
+
+    // Auth
+    INVALID_CREDENTIALS("A001", "Invalid email or password"),
 
     // Product
     PRODUCT_NOT_FOUND("P001", "Product not found"),

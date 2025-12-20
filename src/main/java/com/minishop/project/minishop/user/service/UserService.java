@@ -6,6 +6,7 @@ import com.minishop.project.minishop.user.domain.User;
 import com.minishop.project.minishop.user.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,14 +15,16 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
-    public User registerUser(String email, String name) {
+    public User registerUser(String email, String password, String name) {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
         }
 
-        User user = User.create(email, name);
+        String encodedPassword = passwordEncoder.encode(password);
+        User user = User.create(email, encodedPassword, name);
         return userRepository.save(user);
     }
 
