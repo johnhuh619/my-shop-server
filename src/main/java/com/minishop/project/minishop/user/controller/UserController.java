@@ -6,6 +6,7 @@ import com.minishop.project.minishop.user.dto.UserResponse;
 import com.minishop.project.minishop.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,6 +34,12 @@ public class UserController {
     @GetMapping("/email/{email}")
     public ApiResponse<UserResponse> getUserByEmail(@PathVariable String email) {
         // TODO: Implement get user by email logic
+        return null;
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    public ApiResponse<UserResponse> deactivateUser(@PathVariable Long id) {
+        // TODO: Implement deactivate user logic
         return null;
     }
 }

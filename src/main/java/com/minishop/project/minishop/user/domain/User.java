@@ -33,4 +33,8 @@ public class User {
                 .createdAt(LocalDateTime.now())
                 .build();
     }
+
+    public void deactivate() {
+        this.status = UserStatus.INACTIVE;
+    }
 }
