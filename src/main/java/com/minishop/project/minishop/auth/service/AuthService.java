@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenService tokenService;
 
     @Transactional(readOnly = true)
     public LoginResponse login(String email, String password) {
@@ -31,7 +31,7 @@ public class AuthService {
             throw new BusinessException(ErrorCode.USER_INACTIVE);
         }
 
-        String accessToken = jwtTokenProvider.createToken(user.getId(), user.getEmail());
+        String accessToken = tokenService.issueToken(user.getId());
 
         return LoginResponse.of(accessToken, user.getId(), user.getEmail(), user.getName());
     }
