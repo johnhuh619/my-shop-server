@@ -21,4 +21,14 @@ public class AuthController {
         LoginResponse response = authService.login(request.getEmail(), request.getPassword());
         return ApiResponse.success(response);
     }
+
+    @PostMapping("/logout")
+    public ApiResponse<?> logout() {
+        // TODO: Implement logout logic later
+        // Options to consider:
+        // 1. Client-side only (stateless, simple)
+        // 2. Token blacklist with Redis (immediate invalidation)
+        // 3. Token version management in DB (per-user invalidation)
+        return ApiResponse.success(null);
+    }
 }

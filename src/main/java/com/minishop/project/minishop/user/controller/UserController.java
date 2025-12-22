@@ -1,17 +1,13 @@
 package com.minishop.project.minishop.user.controller;
 
 import com.minishop.project.minishop.common.response.ApiResponse;
+import com.minishop.project.minishop.common.util.AuthenticationContext;
+import com.minishop.project.minishop.user.domain.User;
 import com.minishop.project.minishop.user.dto.UserRegisterRequest;
 import com.minishop.project.minishop.user.dto.UserResponse;
 import com.minishop.project.minishop.user.service.UserService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/users")
@@ -21,25 +17,25 @@ public class UserController {
 
     @PostMapping("/register")
     public ApiResponse<UserResponse> registerUser(@RequestBody UserRegisterRequest request) {
-        // TODO: Implement registration logic
-        return null;
+        User user = userService.registerUser(
+                request.getEmail(),
+                request.getPassword(),
+                request.getName()
+        );
+        return ApiResponse.success(UserResponse.from(user));
     }
 
-    @GetMapping("/{id}")
-    public ApiResponse<UserResponse> getUserById(@PathVariable Long id) {
-        // TODO: Implement get user by id logic
-        return null;
+    @GetMapping("/me")
+    public ApiResponse<UserResponse> getCurrentUser() {
+        Long id = AuthenticationContext.getCurrentUserId();
+        User user = userService.getUserById(id);
+        return ApiResponse.success(UserResponse.from(user));
     }
 
-    @GetMapping("/email/{email}")
-    public ApiResponse<UserResponse> getUserByEmail(@PathVariable String email) {
-        // TODO: Implement get user by email logic
-        return null;
-    }
-
-    @PatchMapping("/{id}/deactivate")
-    public ApiResponse<UserResponse> deactivateUser(@PathVariable Long id) {
-        // TODO: Implement deactivate user logic
-        return null;
+    @PatchMapping("/me/deactivate")
+    public ApiResponse<UserResponse> deactivateUser() {
+        Long id = AuthenticationContext.getCurrentUserId();
+        User user = userService.deactivateUser(id);
+        return ApiResponse.success(UserResponse.from(user));
     }
 }
