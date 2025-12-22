@@ -36,8 +36,4 @@ public class AuthService {
 
         return LoginResponse.of(accessToken, user.getId(), user.getEmail(), user.getName());
     }
-
-    public TokenPayload validateToken(String token) {
-        return tokenService.validateAccessToken(token);
-    }
 }

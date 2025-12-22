@@ -38,30 +38,6 @@ public class TokenService {
                 .compact();
     }
 
-    public Long getUserId(String token) {
-        Claims claims = parseClaims(token);
-        return Long.parseLong(claims.getSubject());
-    }
-
-    public Date getIssuedAt(String token) {
-        Claims claims = parseClaims(token);
-        return claims.getIssuedAt();
-    }
-
-    public Date getExpiresAt(String token) {
-        Claims claims = parseClaims(token);
-        return claims.getExpiration();
-    }
-
-    public boolean validateToken(String token) {
-        try {
-            parseClaims(token);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     public TokenPayload validateAccessToken(String token) {
         try {
             Claims claims = parseClaims(token);
