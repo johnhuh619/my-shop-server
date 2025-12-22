@@ -2,6 +2,7 @@ package com.minishop.project.minishop.product.service;
 
 import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
+import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.product.domain.Product;
 import com.minishop.project.minishop.product.domain.ProductStatus;
 import com.minishop.project.minishop.product.repository.ProductRepository;
@@ -16,13 +17,18 @@ import java.util.List;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final InventoryService inventoryService;
 
     @Transactional
     public Product createProduct(String name, String description, Long unitPrice) {
         validateProductInput(name, description, unitPrice);
 
         Product product = Product.create(name, description, unitPrice);
-        return productRepository.save(product);
+        Product savedProduct = productRepository.save(product);
+
+        inventoryService.initializeInventory(savedProduct.getId());
+
+        return savedProduct;
     }
 
     @Transactional(readOnly = true)

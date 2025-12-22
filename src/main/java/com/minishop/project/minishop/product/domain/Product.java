@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -32,21 +33,21 @@ public class Product {
     private ProductStatus status;
 
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Builder
     public Product(Long id, String name, String description, Long unitPrice,
-                   ProductStatus status, LocalDateTime createdAt, LocalDateTime updatedAt) {
+                   ProductStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.unitPrice = unitPrice;
         this.status = status != null ? status : ProductStatus.ACTIVE;
-        this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
-        this.updatedAt = updatedAt != null ? updatedAt : LocalDateTime.now();
+        this.createdAt = createdAt != null ? createdAt : Instant.now();
+        this.updatedAt = updatedAt != null ? updatedAt : Instant.now();
     }
 
     public static Product create(String name, String description, Long unitPrice) {
@@ -55,30 +56,30 @@ public class Product {
                 .description(description)
                 .unitPrice(unitPrice)
                 .status(ProductStatus.ACTIVE)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 
     public void deactivate() {
         this.status = ProductStatus.INACTIVE;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = Instant.now();
     }
 
     public void activate() {
         this.status = ProductStatus.ACTIVE;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = Instant.now();
     }
 
     public void delete() {
         this.status = ProductStatus.DELETED;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = Instant.now();
     }
 
     public void updateInfo(String name, String description, Long unitPrice) {
         this.name = name;
         this.description = description;
         this.unitPrice = unitPrice;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = Instant.now();
     }
 }

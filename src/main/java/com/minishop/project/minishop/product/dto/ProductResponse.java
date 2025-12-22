@@ -4,6 +4,7 @@ import com.minishop.project.minishop.product.domain.Product;
 import com.minishop.project.minishop.product.domain.ProductStatus;
 import lombok.Getter;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Getter
@@ -13,11 +14,11 @@ public class ProductResponse {
     private final String description;
     private final Long unitPrice;
     private final ProductStatus status;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private final Instant createdAt;
+    private final Instant updatedAt;
 
     private ProductResponse(Long id, String name, String description, Long unitPrice,
-                           ProductStatus status, LocalDateTime createdAt, LocalDateTime updatedAt) {
+                           ProductStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.name = name;
         this.description = description;
