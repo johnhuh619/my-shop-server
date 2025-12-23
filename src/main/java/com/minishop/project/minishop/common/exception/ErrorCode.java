@@ -24,6 +24,8 @@ public enum ErrorCode {
     // Order
     ORDER_NOT_FOUND("O001", "Order not found"),
     INVALID_ORDER_STATUS("O002", "Invalid order status"),
+    ORDER_ALREADY_PAID("O003", "Order is already paid"),
+    ORDER_EXPIRED("O004", "Order has expired"),
 
     // Payment
     PAYMENT_NOT_FOUND("PAY001", "Payment not found"),
@@ -32,7 +34,9 @@ public enum ErrorCode {
 
     // Refund
     REFUND_NOT_FOUND("R001", "Refund not found"),
-    INVALID_REFUND_AMOUNT("R002", "Invalid refund amount");
+    INVALID_REFUND_AMOUNT("R002", "Invalid refund amount"),
+    REFUND_NOT_ALLOWED("R003", "Refund not allowed for this order"),
+    REFUND_AMOUNT_EXCEEDED("R004", "Refund amount exceeds payment");
 
     private final String code;
     private final String message;

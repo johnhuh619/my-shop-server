@@ -107,4 +107,31 @@ public class Order {
         this.status = OrderStatus.COMPLETED;
         this.updatedAt = Instant.now();
     }
+
+    public void expire() {
+        if (this.status != OrderStatus.CREATED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                    "Order can only be expired when status is CREATED");
+        }
+        this.status = OrderStatus.EXPIRED;
+        this.updatedAt = Instant.now();
+    }
+
+    public void requestRefund() {
+        if (this.status != OrderStatus.PAID) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                    "Refund can only be requested when order status is PAID");
+        }
+        this.status = OrderStatus.REFUND_REQUESTED;
+        this.updatedAt = Instant.now();
+    }
+
+    public void markAsRefunded() {
+        if (this.status != OrderStatus.REFUND_REQUESTED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                    "Order can only be marked as refunded when status is REFUND_REQUESTED");
+        }
+        this.status = OrderStatus.REFUNDED;
+        this.updatedAt = Instant.now();
+    }
 }

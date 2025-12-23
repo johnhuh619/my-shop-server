@@ -100,6 +100,52 @@ public class OrderService {
         return orderRepository.save(order);
     }
 
+    /**
+     * 내부용 메서드 - userId 검증 없이 Order 조회
+     * Payment 실패 보상, Refund 등에서 사용
+     */
+    @Transactional(readOnly = true)
+    public Order getOrderById(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
+    @Transactional
+    public void expireOrder(Long orderId) {
+        Order order = orderRepository.findByIdWithLock(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() != com.minishop.project.minishop.order.domain.OrderStatus.CREATED) {
+            return; // 이미 처리됨
+        }
+
+        // 재고 해제
+        for (OrderItem item : order.getOrderItems()) {
+            inventoryService.release(item.getProductId(), item.getQuantity());
+        }
+
+        order.expire();
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    public Order requestRefund(Long orderId) {
+        Order order = orderRepository.findByIdWithLock(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        order.requestRefund();
+        return orderRepository.save(order);
+    }
+
+    @Transactional
+    public Order markAsRefunded(Long orderId) {
+        Order order = orderRepository.findByIdWithLock(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        order.markAsRefunded();
+        return orderRepository.save(order);
+    }
+
     private void validateOrderRequest(List<OrderItemRequest> itemRequests) {
         if (itemRequests == null || itemRequests.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "Order must have at least one item");

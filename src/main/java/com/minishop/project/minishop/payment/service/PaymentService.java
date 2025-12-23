@@ -2,7 +2,9 @@ package com.minishop.project.minishop.payment.service;
 
 import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
+import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.order.domain.Order;
+import com.minishop.project.minishop.order.domain.OrderItem;
 import com.minishop.project.minishop.order.domain.OrderStatus;
 import com.minishop.project.minishop.order.service.OrderService;
 import com.minishop.project.minishop.payment.domain.Payment;
@@ -20,6 +22,7 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final OrderService orderService;
+    private final InventoryService inventoryService;
 
     @Transactional
     public Payment processPayment(Long userId, Long orderId, String idempotencyKey) {
@@ -55,6 +58,8 @@ public class PaymentService {
 
         } catch (Exception e) {
             payment.markAsFailed();
+            // 결제 실패 시 재고 보상 (추후 이벤트로 전환 가능)
+            onPaymentFailed(payment, orderId);
         }
 
         return paymentRepository.save(payment);
@@ -77,6 +82,15 @@ public class PaymentService {
     private void onPaymentCompleted(Payment payment) {
         // Order 상태만 변경 (CREATED → PAID)
         orderService.markAsPaid(payment.getOrderId());
+    }
+
+    // 추후 이벤트 발행으로 전환 가능한 메서드
+    // 결제 실패 시 예약된 재고 해제
+    private void onPaymentFailed(Payment payment, Long orderId) {
+        Order order = orderService.getOrderById(orderId);
+        for (OrderItem item : order.getOrderItems()) {
+            inventoryService.release(item.getProductId(), item.getQuantity());
+        }
     }
 
     private void validateOrderForPayment(Order order) {
