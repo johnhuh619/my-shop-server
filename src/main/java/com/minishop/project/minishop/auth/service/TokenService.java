@@ -16,6 +16,8 @@ import java.util.Date;
 @Service
 public class TokenService {
 
+    private static final String ROLE_CLAIM = "role";
+
     private final SecretKey secretKey;
     private final long validityInMilliseconds;
 
@@ -26,12 +28,13 @@ public class TokenService {
         this.validityInMilliseconds = validityInMilliseconds;
     }
 
-    public String issueToken(Long userId) {
+    public String issueToken(Long userId, String role) {
         Date now = new Date();
         Date expiresAt = new Date(now.getTime() + validityInMilliseconds);
 
         return Jwts.builder()
                 .subject(String.valueOf(userId))
+                .claim(ROLE_CLAIM, role)
                 .issuedAt(now)
                 .expiration(expiresAt)
                 .signWith(secretKey)
@@ -41,8 +44,10 @@ public class TokenService {
     public TokenPayload validateAccessToken(String token) {
         try {
             Claims claims = parseClaims(token);
+            String role = claims.get(ROLE_CLAIM, String.class);
             TokenPayload payload = TokenPayload.of(
                     Long.parseLong(claims.getSubject()),
+                    role != null ? role : "CUSTOMER",
                     claims.getIssuedAt().toInstant(),
                     claims.getExpiration().toInstant()
             );

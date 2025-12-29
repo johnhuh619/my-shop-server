@@ -94,6 +94,12 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
+    public Payment getPaymentById(Long paymentId) {
+        return paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public List<Payment> getPaymentsByUser(Long userId) {
         return paymentRepository.findByUserId(userId);
     }

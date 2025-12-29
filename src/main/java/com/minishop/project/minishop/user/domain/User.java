@@ -37,16 +37,22 @@ public class User {
     @Column(nullable = false)
     private UserStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserRole role;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public User(Long id, String email, String password, String name, UserStatus status, LocalDateTime createdAt) {
+    public User(Long id, String email, String password, String name,
+                UserStatus status, UserRole role, LocalDateTime createdAt) {
         this.id = id;
         this.email = email;
         this.password = password;
         this.name = name;
         this.status = status != null ? status : UserStatus.ACTIVE;
+        this.role = role != null ? role : UserRole.CUSTOMER;
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
     }
 
@@ -56,6 +62,18 @@ public class User {
                 .password(password)
                 .name(name)
                 .status(UserStatus.ACTIVE)
+                .role(UserRole.CUSTOMER)
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+
+    public static User createAdmin(String email, String password, String name) {
+        return User.builder()
+                .email(email)
+                .password(password)
+                .name(name)
+                .status(UserStatus.ACTIVE)
+                .role(UserRole.ADMIN)
                 .createdAt(LocalDateTime.now())
                 .build();
     }

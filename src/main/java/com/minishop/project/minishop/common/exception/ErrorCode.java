@@ -36,7 +36,12 @@ public enum ErrorCode {
     REFUND_NOT_FOUND("R001", "Refund not found"),
     INVALID_REFUND_AMOUNT("R002", "Invalid refund amount"),
     REFUND_NOT_ALLOWED("R003", "Refund not allowed for this order"),
-    REFUND_AMOUNT_EXCEEDED("R004", "Refund amount exceeds payment");
+    REFUND_AMOUNT_EXCEEDED("R004", "Refund amount exceeds payment"),
+    INVALID_REFUND_STATUS("R005", "Invalid refund status"),
+    REFUND_QUANTITY_EXCEEDED("R006", "Refund quantity exceeds available quantity"),
+
+    // OrderItem
+    ORDER_ITEM_NOT_FOUND("OI001", "Order item not found");
 
     private final String code;
     private final String message;

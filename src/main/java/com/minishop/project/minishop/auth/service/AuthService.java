@@ -1,6 +1,5 @@
 package com.minishop.project.minishop.auth.service;
 
-import com.minishop.project.minishop.auth.domain.TokenPayload;
 import com.minishop.project.minishop.auth.dto.LoginResponse;
 import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
@@ -32,7 +31,7 @@ public class AuthService {
             throw new BusinessException(ErrorCode.USER_INACTIVE);
         }
 
-        String accessToken = tokenService.issueToken(user.getId());
+        String accessToken = tokenService.issueToken(user.getId(), user.getRole().name());
 
         return LoginResponse.of(accessToken, user.getId(), user.getEmail(), user.getName());
     }

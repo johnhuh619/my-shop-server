@@ -24,7 +24,7 @@ public class RefundController {
         Refund refund = refundService.processRefund(
                 userId,
                 request.getPaymentId(),
-                request.getAmount(),
+                request.getItems(),
                 request.getReason()
         );
         return ApiResponse.success(RefundResponse.from(refund));
