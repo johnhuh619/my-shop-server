@@ -2,15 +2,17 @@ package com.minishop.project.minishop.payment.service;
 
 import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
-import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.order.domain.Order;
-import com.minishop.project.minishop.order.domain.OrderItem;
 import com.minishop.project.minishop.order.domain.OrderStatus;
 import com.minishop.project.minishop.order.service.OrderService;
 import com.minishop.project.minishop.payment.domain.Payment;
+import com.minishop.project.minishop.payment.event.PaymentCompletedEvent;
+import com.minishop.project.minishop.payment.event.PaymentCreatedEvent;
+import com.minishop.project.minishop.payment.event.PaymentFailedEvent;
 import com.minishop.project.minishop.payment.gateway.PaymentGateway;
 import com.minishop.project.minishop.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,8 +26,8 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final OrderService orderService;
-    private final InventoryService inventoryService;
     private final PaymentGateway paymentGateway;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Payment processPayment(Long userId, Long orderId, String idempotencyKey) {
@@ -46,28 +48,18 @@ public class PaymentService {
         validateOrderForPayment(order);
 
         try {
-            // 3. Payment 생성 (스냅샷)
+            // 3. Payment 생성 (REQUESTED 상태)
             Payment payment = Payment.create(
                     userId, orderId, idempotencyKey, order.getTotalAmount()
             );
             payment = paymentRepository.save(payment);
             paymentRepository.flush(); // Force immediate DB write to detect UNIQUE constraint violation
 
-            // 4. 결제 처리 (외부 PG 연동)
-            try {
-                paymentGateway.processPayment(payment);
-                payment.markAsCompleted();
+            // 4. 결제 생성 이벤트 발행 (트랜잭션 커밋 후 PG 호출은 비동기 처리)
+            eventPublisher.publishEvent(PaymentCreatedEvent.from(payment));
 
-                // 5. 결제 성공 후 처리 (추후 이벤트로 전환 가능)
-                onPaymentCompleted(payment);
-
-            } catch (Exception e) {
-                payment.markAsFailed();
-                // 결제 실패 시 재고 보상 (추후 이벤트로 전환 가능)
-                onPaymentFailed(payment, orderId);
-            }
-
-            return paymentRepository.save(payment);
+            // 5. Payment는 REQUESTED 상태로 즉시 반환 (응답 시간 단축)
+            return payment;
 
         } catch (DataIntegrityViolationException e) {
             // 동시성 이슈: 다른 트랜잭션에서 이미 같은 키로 Payment 생성
@@ -104,22 +96,6 @@ public class PaymentService {
         return paymentRepository.findByUserId(userId);
     }
 
-    // 추후 이벤트 발행으로 전환 가능한 메서드
-    // DOMAIN_RULES: Payment는 Inventory를 직접 조작하지 않음
-    // Inventory confirm은 OrderService.completeOrder()에서 처리
-    private void onPaymentCompleted(Payment payment) {
-        // Order 상태만 변경 (CREATED → PAID)
-        orderService.markAsPaid(payment.getOrderId());
-    }
-
-    // 추후 이벤트 발행으로 전환 가능한 메서드
-    // 결제 실패 시 예약된 재고 해제
-    private void onPaymentFailed(Payment payment, Long orderId) {
-        Order order = orderService.getOrderById(orderId);
-        for (OrderItem item : order.getOrderItems()) {
-            inventoryService.release(item.getProductId(), item.getQuantity());
-        }
-    }
 
     private void validateOrderForPayment(Order order) {
         if (order.getStatus() != OrderStatus.CREATED) {

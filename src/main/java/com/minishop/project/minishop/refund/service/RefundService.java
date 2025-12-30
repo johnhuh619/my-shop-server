@@ -2,7 +2,6 @@ package com.minishop.project.minishop.refund.service;
 
 import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
-import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.order.domain.Order;
 import com.minishop.project.minishop.order.domain.OrderItem;
 import com.minishop.project.minishop.order.domain.OrderStatus;
@@ -13,8 +12,10 @@ import com.minishop.project.minishop.refund.domain.Refund;
 import com.minishop.project.minishop.refund.domain.RefundItem;
 import com.minishop.project.minishop.refund.domain.RefundStatus;
 import com.minishop.project.minishop.refund.dto.RefundItemRequest;
+import com.minishop.project.minishop.refund.event.RefundCompletedEvent;
 import com.minishop.project.minishop.refund.repository.RefundRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +31,7 @@ public class RefundService {
     private final RefundRepository refundRepository;
     private final PaymentService paymentService;
     private final OrderService orderService;
-    private final InventoryService inventoryService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Refund processRefund(Long userId, Long paymentId,
@@ -85,7 +86,7 @@ public class RefundService {
         // 3. 환불 처리 성공
         refund.markAsCompleted();
 
-        // 4. 환불 완료 후 처리 (실패 시 트랜잭션 롤백)
+        // 4. 환불 완료 이벤트 발행 (트랜잭션 커밋 후 비동기 처리)
         onRefundCompleted(refund);
 
         return refundRepository.save(refund);
@@ -122,29 +123,21 @@ public class RefundService {
         return refundRepository.findByStatus(status);
     }
 
+    /**
+     * 환불 완료 이벤트 발행
+     * 트랜잭션 커밋 후 RefundEventListener에서 Order 상태 변경 및 재고 복구
+     */
     private void onRefundCompleted(Refund refund) {
-        // Order 상태 업데이트
-        updateOrderStatus(refund);
-
-        // RefundItem 기반 정확한 재고 복구
-        for (RefundItem item : refund.getRefundItems()) {
-            inventoryService.release(item.getProductId(), item.getQuantity());
-        }
-    }
-
-    private void updateOrderStatus(Refund refund) {
         Long paymentId = refund.getPaymentId();
         Payment payment = paymentService.getPaymentById(paymentId);
 
-        // 완료된 환불 금액 합계 계산
+        // 완료된 환불 금액 합계 계산 (이번 환불 포함)
         Long totalRefunded = refundRepository.sumAmountByPaymentIdAndStatus(
                 paymentId, RefundStatus.COMPLETED);
 
-        if (totalRefunded.equals(payment.getAmount())) {
-            // 전액 환불 완료
-            orderService.markAsRefunded(refund.getOrderId());
-        }
-        // 부분 환불인 경우 Order 상태 유지 (PAID)
+        eventPublisher.publishEvent(
+                RefundCompletedEvent.from(refund, totalRefunded, payment.getAmount())
+        );
     }
 
     private void validateOrderForRefund(Order order) {

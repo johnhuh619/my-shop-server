@@ -75,6 +75,7 @@ Project uses Lombok for reducing boilerplate. Annotation processor is configured
 Tests use Spring Boot test starters including:
 - `spring-boot-starter-webmvc-test` for web layer testing
 - `spring-boot-starter-security-test` for security testing
+- `awaitility` for asynchronous event testing
 
 JUnit Platform is configured as the test runtime.
 
@@ -119,7 +120,7 @@ Use `./gradlew` (or `gradlew.bat` on Windows) instead of a globally installed Gr
 Claudec MUST NOT:
 - Refactor unrelated Code
 - Change Architecture or domain Boundary
-- Introduce new dependency
+- Introduce new dependency (except approved test dependencies: Awaitility)
 - Modify Spring Security configuration
 - Add logic that bypass validation or idempotency
 - Move or rename packages
