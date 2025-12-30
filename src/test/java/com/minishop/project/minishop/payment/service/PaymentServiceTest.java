@@ -22,11 +22,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * PaymentService 통합 테스트
@@ -34,9 +36,13 @@ import static org.assertj.core.api.Assertions.*;
  * - 서비스 간 협력 검증
  * - 멱등성 검증
  * - 실패 보상 검증
+ *
+ * 주의: @Transactional 제거
+ * - 비동기 이벤트 테스트를 위해 트랜잭션이 실제로 커밋되어야 함
+ * - @DirtiesContext로 테스트 간 격리 보장
  */
 @SpringBootTest
-@Transactional
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class PaymentServiceTest {
 
     @TestConfiguration
@@ -91,15 +97,23 @@ class PaymentServiceTest {
         // When
         Payment payment = paymentService.processPayment(testUserId, order.getId(), "key-123");
 
-        // Then
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        // Then: Payment는 REQUESTED 상태로 즉시 반환
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
         assertThat(payment.getUserId()).isEqualTo(testUserId);
         assertThat(payment.getOrderId()).isEqualTo(order.getId());
         assertThat(payment.getAmount()).isEqualTo(20000L); // 10000 * 2
 
-        // Then: Order 상태 확인
-        Order paidOrder = orderService.getOrder(order.getId(), testUserId);
-        assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+        // Then: 비동기 이벤트 처리 완료 대기 - Payment COMPLETED
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Payment updated = paymentService.getPayment(payment.getId(), testUserId);
+            assertThat(updated.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        });
+
+        // Then: 비동기 이벤트 처리 완료 대기 - Order PAID
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Order paidOrder = orderService.getOrder(order.getId(), testUserId);
+            assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+        });
     }
 
     @Test
@@ -121,6 +135,12 @@ class PaymentServiceTest {
         ));
 
         paymentService.processPayment(testUserId, order.getId(), "key-1");
+
+        // 비동기 이벤트 처리 완료 대기 - Order PAID 전이 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Order paidOrder = orderService.getOrder(order.getId(), testUserId);
+            assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+        });
 
         // When & Then: 같은 주문 재결제 시도
         assertThatThrownBy(() ->
@@ -183,10 +203,16 @@ class PaymentServiceTest {
         // When: 동일 키로 재요청
         Payment secondPayment = paymentService.processPayment(testUserId, order.getId(), "idempotent-key");
 
-        // Then: 같은 Payment 반환
+        // Then: 같은 Payment 반환 (REQUESTED 상태)
         assertThat(firstPayment.getId()).isEqualTo(secondPayment.getId());
-        assertThat(firstPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-        assertThat(secondPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        assertThat(firstPayment.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
+        assertThat(secondPayment.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
+
+        // Then: 비동기 처리 후 COMPLETED 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Payment updated = paymentService.getPayment(firstPayment.getId(), testUserId);
+            assertThat(updated.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        });
 
         // Then: DB에는 Payment 1개만 존재
         List<Payment> payments = paymentRepository.findByUserId(testUserId);
@@ -256,13 +282,21 @@ class PaymentServiceTest {
         // When
         Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
 
-        // Then: Payment 상태 FAILED
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        // Then: Payment는 REQUESTED 상태로 즉시 반환
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
 
-        // Then: 재고 해제됨
-        Inventory inventory = inventoryService.getByProductId(product.getId());
-        assertThat(inventory.getQuantityAvailable()).isEqualTo(10L); // 원복
-        assertThat(inventory.getQuantityReserved()).isEqualTo(0L); // 해제
+        // Then: 비동기 처리 후 FAILED 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Payment updated = paymentService.getPayment(payment.getId(), testUserId);
+            assertThat(updated.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        });
+
+        // Then: 비동기 이벤트로 재고 해제 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Inventory inventory = inventoryService.getByProductId(product.getId());
+            assertThat(inventory.getQuantityAvailable()).isEqualTo(10L); // 원복
+            assertThat(inventory.getQuantityReserved()).isEqualTo(0L); // 해제
+        });
     }
 
     @Test
@@ -278,13 +312,15 @@ class PaymentServiceTest {
         testGateway.setShouldFail(true);
 
         // When: 결제 실패
-        paymentService.processPayment(testUserId, order.getId(), "key");
+        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
 
-        // Then: 재고 완전 원복
-        Inventory inventory = inventoryService.getByProductId(product.getId());
-        assertThat(inventory.getQuantityAvailable()).isEqualTo(20L);
-        assertThat(inventory.getQuantityReserved()).isEqualTo(0L);
-        assertThat(inventory.getTotalQuantity()).isEqualTo(20L);
+        // Then: 비동기 이벤트로 재고 완전 원복 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Inventory inventory = inventoryService.getByProductId(product.getId());
+            assertThat(inventory.getQuantityAvailable()).isEqualTo(20L);
+            assertThat(inventory.getQuantityReserved()).isEqualTo(0L);
+            assertThat(inventory.getTotalQuantity()).isEqualTo(20L);
+        });
     }
 
     @Test
@@ -304,16 +340,18 @@ class PaymentServiceTest {
         testGateway.setShouldFail(true);
 
         // When
-        paymentService.processPayment(testUserId, order.getId(), "key");
+        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
 
-        // Then: 모든 상품 재고 해제
-        Inventory inventory1 = inventoryService.getByProductId(product1.getId());
-        assertThat(inventory1.getQuantityAvailable()).isEqualTo(100L);
-        assertThat(inventory1.getQuantityReserved()).isEqualTo(0L);
+        // Then: 비동기 이벤트로 모든 상품 재고 해제 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Inventory inventory1 = inventoryService.getByProductId(product1.getId());
+            assertThat(inventory1.getQuantityAvailable()).isEqualTo(100L);
+            assertThat(inventory1.getQuantityReserved()).isEqualTo(0L);
 
-        Inventory inventory2 = inventoryService.getByProductId(product2.getId());
-        assertThat(inventory2.getQuantityAvailable()).isEqualTo(50L);
-        assertThat(inventory2.getQuantityReserved()).isEqualTo(0L);
+            Inventory inventory2 = inventoryService.getByProductId(product2.getId());
+            assertThat(inventory2.getQuantityAvailable()).isEqualTo(50L);
+            assertThat(inventory2.getQuantityReserved()).isEqualTo(0L);
+        });
     }
 
     // ============================================
@@ -468,11 +506,13 @@ class PaymentServiceTest {
         ));
 
         // When
-        paymentService.processPayment(testUserId, order.getId(), "key");
+        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
 
-        // Then: Order 상태 PAID로 전이
-        Order paidOrder = orderService.getOrder(order.getId(), testUserId);
-        assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+        // Then: 비동기 이벤트로 Order 상태 PAID로 전이 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Order paidOrder = orderService.getOrder(order.getId(), testUserId);
+            assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+        });
     }
 
     @Test

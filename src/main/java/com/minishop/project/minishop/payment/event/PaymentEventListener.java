@@ -3,6 +3,7 @@ package com.minishop.project.minishop.payment.event;
 import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.order.domain.Order;
 import com.minishop.project.minishop.order.domain.OrderItem;
+import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.order.service.OrderService;
 import com.minishop.project.minishop.payment.domain.Payment;
 import com.minishop.project.minishop.payment.gateway.PaymentGateway;
@@ -29,6 +30,7 @@ import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMI
 public class PaymentEventListener {
 
     private final OrderService orderService;
+    private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
@@ -37,8 +39,8 @@ public class PaymentEventListener {
     /**
      * 결제 생성 이벤트 처리
      * - 외부 PG 호출을 비동기로 처리
-     * - 성공 시 PaymentCompletedEvent 발행
-     * - 실패 시 PaymentFailedEvent 발행
+     * - 성공 시 Order 상태 직접 업데이트
+     * - 실패 시 재고 직접 해제
      */
     @TransactionalEventListener(phase = AFTER_COMMIT)
     @Async
@@ -58,10 +60,11 @@ public class PaymentEventListener {
             // 3. 결제 성공 처리
             payment.markAsCompleted();
             paymentRepository.save(payment);
+            log.info("Payment marked as COMPLETED: paymentId={}", event.getPaymentId());
 
-            // 4. 결제 완료 이벤트 발행
-            eventPublisher.publishEvent(PaymentCompletedEvent.from(payment));
-            log.info("PaymentCompletedEvent published: paymentId={}", event.getPaymentId());
+            // 4. Order 상태 직접 업데이트 (CREATED → PAID)
+            orderService.markAsPaid(event.getOrderId());
+            log.info("Order marked as PAID: orderId={}", event.getOrderId());
 
         } catch (Exception e) {
             log.error("PG payment failed: paymentId={}, error={}",
@@ -75,14 +78,16 @@ public class PaymentEventListener {
                 // 2. 결제 실패 처리
                 payment.markAsFailed();
                 paymentRepository.save(payment);
+                log.info("Payment marked as FAILED: paymentId={}", event.getPaymentId());
 
-                // 3. OrderItems 조회 (재고 해제용)
-                Order order = orderService.getOrderById(payment.getOrderId());
-                List<OrderItem> orderItems = order.getOrderItems();
-
-                // 4. 결제 실패 이벤트 발행
-                eventPublisher.publishEvent(PaymentFailedEvent.from(payment, orderItems));
-                log.info("PaymentFailedEvent published: paymentId={}", event.getPaymentId());
+                // 3. OrderItems 조회 (즉시 로딩) 및 재고 해제
+                Order order = orderRepository.findByIdWithItems(payment.getOrderId())
+                        .orElseThrow(() -> new RuntimeException("Order not found: " + payment.getOrderId()));
+                for (OrderItem item : order.getOrderItems()) {
+                    inventoryService.release(item.getProductId(), item.getQuantity());
+                    log.info("Inventory released: productId={}, quantity={}",
+                            item.getProductId(), item.getQuantity());
+                }
 
             } catch (Exception failureHandlingError) {
                 log.error("Failed to handle payment failure: paymentId={}, error={}",

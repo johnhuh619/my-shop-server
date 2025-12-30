@@ -33,4 +33,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      * 특정 상태이고 생성 시간이 특정 시간 이전인 주문 조회
      */
     List<Order> findByStatusAndCreatedAtBefore(OrderStatus status, Instant createdAt);
+
+    /**
+     * OrderItems를 즉시 로딩하여 조회
+     * 비동기 이벤트 처리에서 사용 (Lazy Loading 방지)
+     */
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.id = :id")
+    Optional<Order> findByIdWithItems(@Param("id") Long id);
 }
