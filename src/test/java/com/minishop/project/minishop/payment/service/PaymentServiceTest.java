@@ -17,12 +17,14 @@ import com.minishop.project.minishop.product.domain.ProductStatus;
 import com.minishop.project.minishop.product.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.minishop.project.minishop.auth.service.TokenBlacklistService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
 
@@ -38,6 +40,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 @SpringBootTest
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class PaymentServiceTest {
+
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
 
     @TestConfiguration
     static class TestConfig {

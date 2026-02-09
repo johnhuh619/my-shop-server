@@ -16,6 +16,7 @@ import com.minishop.project.minishop.product.repository.ProductRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.minishop.project.minishop.auth.service.TokenBlacklistService;
 import com.minishop.project.minishop.payment.gateway.PaymentGateway;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +24,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +43,9 @@ import static org.assertj.core.api.Assertions.*;
  */
 @SpringBootTest
 class PaymentIdempotencyTest {
+
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
 
     @TestConfiguration
     static class TestConfig {

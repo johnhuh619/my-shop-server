@@ -20,12 +20,14 @@ import com.minishop.project.minishop.refund.domain.Refund;
 import com.minishop.project.minishop.refund.domain.RefundStatus;
 import com.minishop.project.minishop.refund.dto.RefundItemRequest;
 import org.junit.jupiter.api.Test;
+import com.minishop.project.minishop.auth.service.TokenBlacklistService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
 
@@ -47,6 +49,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 @SpringBootTest
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class RefundServiceTest {
+
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
 
     @TestConfiguration
     static class TestConfig {
