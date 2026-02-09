@@ -225,8 +225,7 @@ public class RefundService {
     }
 
     private void processExternalRefund(Refund refund) {
-        // TODO: 외부 환불 처리 로직
-        // 현재는 항상 성공으로 처리
+        paymentService.cancelPayment(refund.getPaymentId(), refund.getReason(), refund.getAmount());
     }
 
     private void validateRefundRequest(Long paymentId, List<RefundItemRequest> itemRequests) {

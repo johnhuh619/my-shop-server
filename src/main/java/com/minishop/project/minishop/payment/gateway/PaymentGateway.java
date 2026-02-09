@@ -1,5 +1,6 @@
 package com.minishop.project.minishop.payment.gateway;
 
+import com.minishop.project.minishop.payment.dto.TossCancelResponse;
 import com.minishop.project.minishop.payment.dto.TossConfirmResponse;
 
 /**
@@ -18,4 +19,14 @@ public interface PaymentGateway {
      * @throws RuntimeException 결제 승인 실패 시
      */
     TossConfirmResponse confirmPayment(String paymentKey, String tossOrderId, Long amount);
+
+    /**
+     * 결제 취소(환불) 요청
+     * @param paymentKey 토스 결제 키
+     * @param cancelReason 취소 사유
+     * @param cancelAmount 취소 금액 (null이면 전액 취소)
+     * @return 토스 취소 응답
+     * @throws RuntimeException 취소 실패 시
+     */
+    TossCancelResponse cancelPayment(String paymentKey, String cancelReason, Long cancelAmount);
 }

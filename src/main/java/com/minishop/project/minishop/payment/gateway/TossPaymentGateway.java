@@ -2,6 +2,7 @@ package com.minishop.project.minishop.payment.gateway;
 
 import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
+import com.minishop.project.minishop.payment.dto.TossCancelResponse;
 import com.minishop.project.minishop.payment.dto.TossConfirmResponse;
 import com.minishop.project.minishop.payment.dto.TossErrorResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
@@ -64,6 +66,38 @@ public class TossPaymentGateway implements PaymentGateway {
             }
 
             throw new BusinessException(ErrorCode.PG_CONFIRM_FAILED, responseBody);
+        }
+    }
+
+    @Override
+    public TossCancelResponse cancelPayment(String paymentKey, String cancelReason, Long cancelAmount) {
+        log.info("Requesting Toss cancel: paymentKey={}, reason={}, amount={}",
+                paymentKey, cancelReason, cancelAmount);
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("cancelReason", cancelReason);
+        if (cancelAmount != null) {
+            requestBody.put("cancelAmount", cancelAmount);
+        }
+
+        try {
+            TossCancelResponse response = restClient.post()
+                    .uri("/payments/{paymentKey}/cancel", paymentKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(TossCancelResponse.class);
+
+            log.info("Toss cancel success: paymentKey={}, status={}",
+                    paymentKey, response != null ? response.getStatus() : "null");
+            return response;
+
+        } catch (org.springframework.web.client.RestClientResponseException e) {
+            String responseBody = e.getResponseBodyAsString();
+            log.error("Toss cancel failed: paymentKey={}, status={}, body={}",
+                    paymentKey, e.getStatusCode(), responseBody);
+
+            throw new BusinessException(ErrorCode.PG_REFUND_FAILED, responseBody);
         }
     }
 }

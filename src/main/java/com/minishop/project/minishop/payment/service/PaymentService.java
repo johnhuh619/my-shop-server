@@ -9,6 +9,7 @@ import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.order.service.OrderService;
 import com.minishop.project.minishop.payment.domain.Payment;
 import com.minishop.project.minishop.payment.domain.PaymentStatus;
+import com.minishop.project.minishop.payment.dto.TossCancelResponse;
 import com.minishop.project.minishop.payment.event.PaymentCompletedEvent;
 import com.minishop.project.minishop.payment.event.PaymentFailedEvent;
 import com.minishop.project.minishop.payment.gateway.PaymentGateway;
@@ -144,6 +145,13 @@ public class PaymentService {
     @Transactional(readOnly = true)
     public List<Payment> getPaymentsByUser(Long userId) {
         return paymentRepository.findByUserId(userId);
+    }
+
+    public TossCancelResponse cancelPayment(Long paymentId, String cancelReason, Long cancelAmount) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+
+        return paymentGateway.cancelPayment(payment.getPaymentKey(), cancelReason, cancelAmount);
     }
 
     public String buildOrderName(Long orderId) {
