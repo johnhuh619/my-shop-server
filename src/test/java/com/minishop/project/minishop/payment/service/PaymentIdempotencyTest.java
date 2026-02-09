@@ -16,8 +16,12 @@ import com.minishop.project.minishop.product.repository.ProductRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.minishop.project.minishop.payment.gateway.PaymentGateway;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.ArrayList;
@@ -37,6 +41,15 @@ import static org.assertj.core.api.Assertions.*;
  */
 @SpringBootTest
 class PaymentIdempotencyTest {
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        @Primary
+        public PaymentGateway testPaymentGateway() {
+            return new TestPaymentGateway();
+        }
+    }
 
     @Autowired
     private PaymentService paymentService;
@@ -112,7 +125,7 @@ class PaymentIdempotencyTest {
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    Payment payment = paymentService.processPayment(
+                    Payment payment = paymentService.preparePayment(
                             testUserId, testOrder.getId(), idempotencyKey);
                     synchronized (results) {
                         results.add(payment);
@@ -167,7 +180,7 @@ class PaymentIdempotencyTest {
             executor.submit(() -> {
                 try {
                     Long orderId = (index < 5) ? testOrder.getId() : order2.getId();
-                    paymentService.processPayment(testUserId, orderId, idempotencyKey);
+                    paymentService.preparePayment(testUserId, orderId, idempotencyKey);
                     successCount.incrementAndGet();
                 } catch (BusinessException e) {
                     if (e.getErrorCode() == ErrorCode.DUPLICATE_PAYMENT) {
@@ -219,7 +232,7 @@ class PaymentIdempotencyTest {
             final int index = i;
             executor.submit(() -> {
                 try {
-                    paymentService.processPayment(
+                    paymentService.preparePayment(
                             testUserId,
                             orders.get(index).getId(),
                             "key-" + index
@@ -264,7 +277,7 @@ class PaymentIdempotencyTest {
                 try {
                     Long userId = (index < 5) ? testUserId : otherUserId;
                     Long orderId = (index < 5) ? testOrder.getId() : otherUserOrder.getId();
-                    paymentService.processPayment(userId, orderId, sameKey);
+                    paymentService.preparePayment(userId, orderId, sameKey);
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     // 다른 userId이므로 같은 키 허용
@@ -346,7 +359,7 @@ class PaymentIdempotencyTest {
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    paymentService.processPayment(testUserId, testOrder.getId(), idempotencyKey);
+                    paymentService.preparePayment(testUserId, testOrder.getId(), idempotencyKey);
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     exceptionCount.incrementAndGet();
@@ -388,7 +401,7 @@ class PaymentIdempotencyTest {
             final int index = i;
             executor.submit(() -> {
                 try {
-                    paymentService.processPayment(
+                    paymentService.preparePayment(
                             testUserId,
                             orders.get(index).getId(),
                             "key-" + index
