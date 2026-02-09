@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-Shop Toss Payments E2E Test</title>
+    <script src="https://js.tosspayments.com/v2/standard"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 20px; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .step { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .step h2 { font-size: 16px; color: #1a73e8; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .step h2 .num { background: #1a73e8; color: #fff; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+        .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+        input, select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        input:focus { outline: none; border-color: #1a73e8; }
+        button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .btn-primary { background: #1a73e8; color: #fff; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-success { background: #0d9e6c; color: #fff; }
+        .btn-success:hover { background: #0a7d55; }
+        .btn-toss { background: #3182f6; color: #fff; font-size: 16px; padding: 12px 32px; }
+        .btn-toss:hover { background: #1b64da; }
+        .btn-toss:disabled { background: #ccc; }
+        .result { margin-top: 8px; padding: 10px; border-radius: 4px; font-size: 13px; font-family: monospace; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
+        .result.ok { background: #e8f5e9; border: 1px solid #a5d6a7; }
+        .result.err { background: #fce4ec; border: 1px solid #ef9a9a; }
+        .result.info { background: #e3f2fd; border: 1px solid #90caf9; }
+        label { font-size: 13px; color: #666; min-width: 60px; }
+        .state-bar { display: flex; gap: 12px; padding: 12px 20px; background: #263238; color: #fff; border-radius: 8px; margin-bottom: 16px; font-size: 13px; font-family: monospace; }
+        .state-bar span { opacity: 0.6; }
+        .state-bar .val { opacity: 1; color: #69f0ae; }
+        .divider { border: none; border-top: 1px dashed #ddd; margin: 12px 0; }
+        #payment-widget { min-height: 60px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Mini-Shop Toss Payments E2E Test</h1>
+
+    <!-- State Bar -->
+    <div class="state-bar" id="stateBar">
+        <div>Token: <span class="val" id="stToken">-</span></div>
+        <div>UserId: <span class="val" id="stUser">-</span></div>
+        <div>ProductId: <span class="val" id="stProduct">-</span></div>
+        <div>OrderId: <span class="val" id="stOrder">-</span></div>
+        <div>PaymentId: <span class="val" id="stPayment">-</span></div>
+    </div>
+
+    <!-- Step 1: Register + Login -->
+    <div class="step">
+        <h2><span class="num">1</span> Register & Login</h2>
+        <div class="row">
+            <label>Email</label>
+            <input id="email" value="test@test.com" placeholder="email">
+            <label>Password</label>
+            <input id="password" value="password123" type="password">
+            <label>Name</label>
+            <input id="name" value="TestUser">
+            <button class="btn-primary" onclick="register()">Register</button>
+            <button class="btn-success" onclick="login()">Login</button>
+        </div>
+        <div id="authResult"></div>
+    </div>
+
+    <!-- Step 2: Create Product + Add Stock -->
+    <div class="step">
+        <h2><span class="num">2</span> Create Product & Add Stock</h2>
+        <div class="row">
+            <label>Name</label>
+            <input id="prodName" value="Test Shirt" placeholder="product name">
+            <label>Price</label>
+            <input id="prodPrice" value="15000" type="number" placeholder="unit price">
+            <button class="btn-primary" onclick="createProduct()">Create Product</button>
+        </div>
+        <div class="row" style="margin-top:4px;">
+            <label>Stock</label>
+            <input id="stockQty" value="100" type="number">
+            <button class="btn-success" onclick="addStock()">Add Stock</button>
+        </div>
+        <div id="productResult"></div>
+    </div>
+
+    <!-- Step 3: Create Order -->
+    <div class="step">
+        <h2><span class="num">3</span> Create Order</h2>
+        <div class="row">
+            <label>Product ID</label>
+            <input id="orderProdId" type="number" placeholder="auto-filled">
+            <label>Quantity</label>
+            <input id="orderQty" value="2" type="number">
+            <button class="btn-primary" onclick="createOrder()">Create Order</button>
+        </div>
+        <div id="orderResult"></div>
+    </div>
+
+    <!-- Step 4: Prepare Payment -->
+    <div class="step">
+        <h2><span class="num">4</span> Prepare Payment</h2>
+        <div class="row">
+            <label>Order ID</label>
+            <input id="payOrderId" type="number" placeholder="auto-filled">
+            <button class="btn-primary" onclick="preparePayment()">Prepare Payment</button>
+        </div>
+        <div id="prepareResult"></div>
+    </div>
+
+    <!-- Step 5: Toss Payment Widget -->
+    <div class="step">
+        <h2><span class="num">5</span> Toss Payments</h2>
+        <p style="font-size:13px; color:#666; margin-bottom:12px;">
+            Prepare Payment 성공 후 아래 버튼을 눌러 Toss 결제창을 띄웁니다. (테스트 모드 - 실제 과금 없음)
+        </p>
+        <div id="payment-widget"></div>
+        <button class="btn-toss" id="tossPayBtn" onclick="requestTossPayment()" disabled>
+            Toss 결제하기
+        </button>
+        <div id="tossResult"></div>
+    </div>
+
+    <!-- Step 6: Confirm Payment (auto or manual) -->
+    <div class="step">
+        <h2><span class="num">6</span> Confirm Payment</h2>
+        <p style="font-size:13px; color:#666; margin-bottom:12px;">
+            Toss 결제 성공 시 자동으로 confirm이 호출됩니다. 수동 테스트도 가능합니다.
+        </p>
+        <div class="row">
+            <label>PaymentKey</label>
+            <input id="confirmPK" placeholder="from toss redirect" style="width:250px;">
+            <label>OrderId</label>
+            <input id="confirmOID" placeholder="tossOrderId" style="width:200px;">
+            <label>Amount</label>
+            <input id="confirmAmt" type="number" placeholder="amount">
+            <button class="btn-success" onclick="confirmPayment()">Confirm</button>
+        </div>
+        <div id="confirmResult"></div>
+    </div>
+
+    <!-- Step 7: Check Status -->
+    <div class="step">
+        <h2><span class="num">7</span> Check Status</h2>
+        <div class="row">
+            <button class="btn-primary" onclick="checkOrder()">Check Order</button>
+            <button class="btn-primary" onclick="checkPayment()">Check Payment</button>
+            <button class="btn-primary" onclick="checkInventory()">Check Inventory</button>
+        </div>
+        <div id="statusResult"></div>
+    </div>
+</div>
+
+<script>
+    const API = '';  // same-origin
+    const CLIENT_KEY = 'test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq';
+
+    let token = '';
+    let userId = null;
+    let productId = null;
+    let orderId = null;
+    let paymentId = null;
+    let tossOrderId = null;
+    let paymentAmount = null;
+
+    // Toss SDK
+    let tossPayments = null;
+    let tossWidget = null;
+
+    function updateState() {
+        document.getElementById('stToken').textContent = token ? token.substring(0, 20) + '...' : '-';
+        document.getElementById('stUser').textContent = userId || '-';
+        document.getElementById('stProduct').textContent = productId || '-';
+        document.getElementById('stOrder').textContent = orderId || '-';
+        document.getElementById('stPayment').textContent = paymentId || '-';
+    }
+
+    function show(id, data, isError) {
+        const el = document.getElementById(id);
+        el.className = 'result ' + (isError ? 'err' : 'ok');
+        el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    }
+
+    function showInfo(id, text) {
+        const el = document.getElementById(id);
+        el.className = 'result info';
+        el.textContent = text;
+    }
+
+    async function api(method, path, body, headers = {}) {
+        const opts = {
+            method,
+            headers: { 'Content-Type': 'application/json', ...headers }
+        };
+        if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+        if (body) opts.body = JSON.stringify(body);
+
+        const res = await fetch(API + path, opts);
+        const json = await res.json();
+        if (!json.success) throw json;
+        return json.data;
+    }
+
+    // ===================== Step 1 =====================
+
+    async function register() {
+        try {
+            const data = await api('POST', '/api/users/register', {
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                name: document.getElementById('name').value
+            });
+            show('authResult', { message: 'Registered!', user: data });
+        } catch (e) {
+            show('authResult', e, true);
+        }
+    }
+
+    async function login() {
+        try {
+            const data = await api('POST', '/api/auth/login', {
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value
+            });
+            token = data.accessToken;
+            userId = data.userId;
+            updateState();
+            show('authResult', { message: 'Logged in!', userId: data.userId, name: data.name });
+        } catch (e) {
+            show('authResult', e, true);
+        }
+    }
+
+    // ===================== Step 2 =====================
+
+    async function createProduct() {
+        try {
+            const data = await api('POST', '/api/products', {
+                name: document.getElementById('prodName').value,
+                description: 'E2E Test Product',
+                unitPrice: Number(document.getElementById('prodPrice').value)
+            });
+            productId = data.id;
+            document.getElementById('orderProdId').value = productId;
+            updateState();
+            show('productResult', { message: 'Product created!', product: data });
+        } catch (e) {
+            show('productResult', e, true);
+        }
+    }
+
+    async function addStock() {
+        try {
+            if (!productId) { show('productResult', 'Create product first', true); return; }
+            const data = await api('PATCH', `/api/inventories/${productId}/add-stock`, {
+                quantity: Number(document.getElementById('stockQty').value)
+            });
+            show('productResult', { message: 'Stock added!', inventory: data });
+        } catch (e) {
+            show('productResult', e, true);
+        }
+    }
+
+    // ===================== Step 3 =====================
+
+    async function createOrder() {
+        try {
+            const pid = Number(document.getElementById('orderProdId').value);
+            const qty = Number(document.getElementById('orderQty').value);
+            const data = await api('POST', '/api/orders', {
+                items: [{ productId: pid, quantity: qty }]
+            });
+            orderId = data.id;
+            document.getElementById('payOrderId').value = orderId;
+            updateState();
+            show('orderResult', { message: 'Order created!', order: data });
+        } catch (e) {
+            show('orderResult', e, true);
+        }
+    }
+
+    // ===================== Step 4 =====================
+
+    async function preparePayment() {
+        try {
+            const oid = Number(document.getElementById('payOrderId').value);
+            const idempotencyKey = 'test-' + Date.now();
+            const data = await api('POST', '/api/payments', { orderId: oid }, {
+                'X-Idempotency-Key': idempotencyKey
+            });
+            paymentId = data.paymentId;
+            tossOrderId = data.tossOrderId;
+            paymentAmount = data.amount;
+            updateState();
+
+            // Fill confirm fields
+            document.getElementById('confirmOID').value = tossOrderId;
+            document.getElementById('confirmAmt').value = paymentAmount;
+
+            // Enable Toss button
+            document.getElementById('tossPayBtn').disabled = false;
+
+            show('prepareResult', {
+                message: 'Payment prepared!',
+                paymentId, tossOrderId, amount: paymentAmount,
+                orderName: data.orderName
+            });
+        } catch (e) {
+            show('prepareResult', e, true);
+        }
+    }
+
+    // ===================== Step 5 =====================
+
+    async function requestTossPayment() {
+        if (!tossOrderId || !paymentAmount) {
+            show('tossResult', 'Prepare payment first', true);
+            return;
+        }
+
+        try {
+            showInfo('tossResult', 'Toss 결제창을 여는 중...');
+
+            const tossPayments = TossPayments(CLIENT_KEY);
+            const payment = tossPayments.payment({ customerKey: 'customer-' + userId });
+
+            await payment.requestPayment({
+                method: 'CARD',
+                amount: { currency: 'KRW', value: paymentAmount },
+                orderId: tossOrderId,
+                orderName: 'E2E Test Payment',
+                successUrl: window.location.origin + '/test.html?status=success',
+                failUrl: window.location.origin + '/test.html?status=fail',
+                card: {
+                    useEscrow: false,
+                    flowMode: 'DEFAULT',
+                    useCardPoint: false,
+                    useAppCardOnly: false,
+                }
+            });
+
+        } catch (e) {
+            if (e.code === 'USER_CANCEL') {
+                showInfo('tossResult', 'User cancelled payment');
+            } else {
+                show('tossResult', { code: e.code, message: e.message }, true);
+            }
+        }
+    }
+
+    // ===================== Step 6 =====================
+
+    async function confirmPayment() {
+        try {
+            const pk = document.getElementById('confirmPK').value;
+            const oid = document.getElementById('confirmOID').value;
+            const amt = Number(document.getElementById('confirmAmt').value);
+
+            if (!pk || !oid || !amt) {
+                show('confirmResult', 'paymentKey, orderId, amount required', true);
+                return;
+            }
+
+            const data = await api('POST', '/api/payments/confirm', {
+                paymentKey: pk,
+                orderId: oid,
+                amount: amt
+            });
+            show('confirmResult', { message: 'Payment confirmed!', payment: data });
+        } catch (e) {
+            show('confirmResult', e, true);
+        }
+    }
+
+    // ===================== Step 7 =====================
+
+    async function checkOrder() {
+        try {
+            if (!orderId) { show('statusResult', 'No order to check', true); return; }
+            const data = await api('GET', `/api/orders/${orderId}`);
+            show('statusResult', { orderStatus: data.status, order: data });
+        } catch (e) {
+            show('statusResult', e, true);
+        }
+    }
+
+    async function checkPayment() {
+        try {
+            if (!paymentId) { show('statusResult', 'No payment to check', true); return; }
+            const data = await api('GET', `/api/payments/${paymentId}`);
+            show('statusResult', { paymentStatus: data.status, payment: data });
+        } catch (e) {
+            show('statusResult', e, true);
+        }
+    }
+
+    async function checkInventory() {
+        try {
+            if (!productId) { show('statusResult', 'No product to check', true); return; }
+            const data = await api('GET', `/api/inventories/${productId}`);
+            show('statusResult', { inventory: data });
+        } catch (e) {
+            show('statusResult', e, true);
+        }
+    }
+
+    // ===================== URL Redirect Handling =====================
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const params = new URLSearchParams(window.location.search);
+        const status = params.get('status');
+
+        if (status === 'success') {
+            const paymentKey = params.get('paymentKey');
+            const oid = params.get('orderId');
+            const amount = params.get('amount');
+
+            document.getElementById('confirmPK').value = paymentKey || '';
+            document.getElementById('confirmOID').value = oid || '';
+            document.getElementById('confirmAmt').value = amount || '';
+
+            showInfo('tossResult', `Toss redirect success! paymentKey=${paymentKey}`);
+
+            // Restore token from sessionStorage
+            const saved = sessionStorage.getItem('minishop_test');
+            if (saved) {
+                const state = JSON.parse(saved);
+                token = state.token || '';
+                userId = state.userId;
+                productId = state.productId;
+                orderId = state.orderId;
+                paymentId = state.paymentId;
+                tossOrderId = state.tossOrderId;
+                paymentAmount = state.paymentAmount;
+                updateState();
+
+                // Auto-confirm
+                if (paymentKey && oid && amount && token) {
+                    confirmPayment();
+                }
+            }
+
+            // Clean URL
+            window.history.replaceState({}, '', '/test.html');
+
+        } else if (status === 'fail') {
+            const code = params.get('code');
+            const message = params.get('message');
+            show('tossResult', { status: 'FAILED', code, message }, true);
+
+            const saved = sessionStorage.getItem('minishop_test');
+            if (saved) {
+                const state = JSON.parse(saved);
+                token = state.token; userId = state.userId;
+                productId = state.productId; orderId = state.orderId;
+                paymentId = state.paymentId;
+                updateState();
+            }
+            window.history.replaceState({}, '', '/test.html');
+        }
+    });
+
+    // Save state before Toss redirect
+    const origRequestToss = requestTossPayment;
+    requestTossPayment = async function() {
+        sessionStorage.setItem('minishop_test', JSON.stringify({
+            token, userId, productId, orderId, paymentId, tossOrderId, paymentAmount
+        }));
+        return origRequestToss();
+    };
+</script>
+</body>
+</html>
