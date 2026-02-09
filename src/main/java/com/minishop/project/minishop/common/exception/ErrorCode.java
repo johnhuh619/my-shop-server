@@ -31,6 +31,8 @@ public enum ErrorCode {
     PAYMENT_NOT_FOUND("PAY001", "Payment not found"),
     DUPLICATE_PAYMENT("PAY002", "Duplicate payment"),
     PAYMENT_FAILED("PAY003", "Payment failed"),
+    PG_CONFIRM_FAILED("PAY004", "PG payment confirmation failed"),
+    PAYMENT_AMOUNT_MISMATCH("PAY005", "Payment amount mismatch"),
 
     // Refund
     REFUND_NOT_FOUND("R001", "Refund not found"),

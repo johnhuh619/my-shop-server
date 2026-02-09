@@ -1,28 +1,21 @@
 package com.minishop.project.minishop.payment.event;
 
 import com.minishop.project.minishop.inventory.service.InventoryService;
-import com.minishop.project.minishop.order.domain.Order;
-import com.minishop.project.minishop.order.domain.OrderItem;
-import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.order.service.OrderService;
-import com.minishop.project.minishop.payment.domain.Payment;
-import com.minishop.project.minishop.payment.gateway.PaymentGateway;
-import com.minishop.project.minishop.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
-
-import java.util.List;
 
 import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT;
 
 /**
  * Payment 이벤트 리스너
  *
- * 트랜잭션 커밋 후 비동기로 실행되어 PG 호출, Order 상태 변경 및 재고 관리 수행
+ * confirm 이후 후속 처리를 비동기로 수행
+ * - PaymentCompletedEvent: Order 상태 변경 (CREATED → PAID)
+ * - PaymentFailedEvent: 재고 해제
  */
 @Slf4j
 @Component
@@ -30,71 +23,7 @@ import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMI
 public class PaymentEventListener {
 
     private final OrderService orderService;
-    private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
-    private final PaymentRepository paymentRepository;
-    private final PaymentGateway paymentGateway;
-    private final ApplicationEventPublisher eventPublisher;
-
-    /**
-     * 결제 생성 이벤트 처리
-     * - 외부 PG 호출을 비동기로 처리
-     * - 성공 시 Order 상태 직접 업데이트
-     * - 실패 시 재고 직접 해제
-     */
-    @TransactionalEventListener(phase = AFTER_COMMIT)
-    @Async
-    public void handlePaymentCreated(PaymentCreatedEvent event) {
-        log.info("[{}] Processing PaymentCreatedEvent: paymentId={}, orderId={}",
-                Thread.currentThread().getName(), event.getPaymentId(), event.getOrderId());
-
-        try {
-            // 1. Payment 재조회
-            Payment payment = paymentRepository.findById(event.getPaymentId())
-                    .orElseThrow(() -> new RuntimeException("Payment not found: " + event.getPaymentId()));
-
-            // 2. 외부 PG 호출 (3초 소요)
-            paymentGateway.processPayment(payment);
-            log.info("PG payment processed successfully: paymentId={}", event.getPaymentId());
-
-            // 3. 결제 성공 처리
-            payment.markAsCompleted();
-            paymentRepository.save(payment);
-            log.info("Payment marked as COMPLETED: paymentId={}", event.getPaymentId());
-
-            // 4. Order 상태 직접 업데이트 (CREATED → PAID)
-            orderService.markAsPaid(event.getOrderId());
-            log.info("Order marked as PAID: orderId={}", event.getOrderId());
-
-        } catch (Exception e) {
-            log.error("PG payment failed: paymentId={}, error={}",
-                    event.getPaymentId(), e.getMessage(), e);
-
-            try {
-                // 1. Payment 재조회 (예외 발생 시 트랜잭션 롤백 대비)
-                Payment payment = paymentRepository.findById(event.getPaymentId())
-                        .orElseThrow(() -> new RuntimeException("Payment not found: " + event.getPaymentId()));
-
-                // 2. 결제 실패 처리
-                payment.markAsFailed();
-                paymentRepository.save(payment);
-                log.info("Payment marked as FAILED: paymentId={}", event.getPaymentId());
-
-                // 3. OrderItems 조회 (즉시 로딩) 및 재고 해제
-                Order order = orderRepository.findByIdWithItems(payment.getOrderId())
-                        .orElseThrow(() -> new RuntimeException("Order not found: " + payment.getOrderId()));
-                for (OrderItem item : order.getOrderItems()) {
-                    inventoryService.release(item.getProductId(), item.getQuantity());
-                    log.info("Inventory released: productId={}, quantity={}",
-                            item.getProductId(), item.getQuantity());
-                }
-
-            } catch (Exception failureHandlingError) {
-                log.error("Failed to handle payment failure: paymentId={}, error={}",
-                        event.getPaymentId(), failureHandlingError.getMessage(), failureHandlingError);
-            }
-        }
-    }
 
     /**
      * 결제 완료 이벤트 처리
@@ -112,7 +41,6 @@ public class PaymentEventListener {
         } catch (Exception e) {
             log.error("Failed to handle PaymentCompletedEvent: orderId={}, error={}",
                     event.getOrderId(), e.getMessage(), e);
-            // Spring Event의 한계: 재시도 로직 없음, 로깅으로만 추적
         }
     }
 
@@ -135,7 +63,6 @@ public class PaymentEventListener {
         } catch (Exception e) {
             log.error("Failed to handle PaymentFailedEvent: orderId={}, error={}",
                     event.getOrderId(), e.getMessage(), e);
-            // Spring Event의 한계: 재시도 로직 없음, 로깅으로만 추적
         }
     }
 }

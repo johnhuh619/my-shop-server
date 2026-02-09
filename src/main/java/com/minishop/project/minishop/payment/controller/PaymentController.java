@@ -5,8 +5,10 @@ import com.minishop.project.minishop.common.exception.ErrorCode;
 import com.minishop.project.minishop.common.response.ApiResponse;
 import com.minishop.project.minishop.common.util.AuthenticationContext;
 import com.minishop.project.minishop.payment.domain.Payment;
+import com.minishop.project.minishop.payment.dto.ConfirmPaymentRequest;
 import com.minishop.project.minishop.payment.dto.CreatePaymentRequest;
 import com.minishop.project.minishop.payment.dto.PaymentResponse;
+import com.minishop.project.minishop.payment.dto.PreparePaymentResponse;
 import com.minishop.project.minishop.payment.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -21,18 +23,29 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping
-    public ApiResponse<PaymentResponse> processPayment(
+    public ApiResponse<PreparePaymentResponse> preparePayment(
             @RequestHeader(value = "X-Idempotency-Key") String idempotencyKey,
             @RequestBody CreatePaymentRequest request) {
 
-        // Idempotency Key 검증
         if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE,
                     "X-Idempotency-Key header is required");
         }
 
         Long userId = AuthenticationContext.getCurrentUserId();
-        Payment payment = paymentService.processPayment(userId, request.getOrderId(), idempotencyKey);
+        Payment payment = paymentService.preparePayment(userId, request.getOrderId(), idempotencyKey);
+        String orderName = paymentService.buildOrderName(payment.getOrderId());
+        return ApiResponse.success(PreparePaymentResponse.from(payment, orderName));
+    }
+
+    @PostMapping("/confirm")
+    public ApiResponse<PaymentResponse> confirmPayment(
+            @RequestBody ConfirmPaymentRequest request) {
+
+        Long userId = AuthenticationContext.getCurrentUserId();
+        Payment payment = paymentService.confirmPayment(
+                userId, request.getPaymentKey(), request.getOrderId(), request.getAmount()
+        );
         return ApiResponse.success(PaymentResponse.from(payment));
     }
 

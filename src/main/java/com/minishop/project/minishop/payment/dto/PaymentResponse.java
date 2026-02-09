@@ -13,16 +13,21 @@ public class PaymentResponse {
     private final Long orderId;
     private final PaymentStatus status;
     private final Long amount;
+    private final String tossOrderId;
+    private final String paymentKey;
     private final Instant createdAt;
     private final Instant updatedAt;
 
     private PaymentResponse(Long id, Long userId, Long orderId, PaymentStatus status,
-                            Long amount, Instant createdAt, Instant updatedAt) {
+                            Long amount, String tossOrderId, String paymentKey,
+                            Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.userId = userId;
         this.orderId = orderId;
         this.status = status;
         this.amount = amount;
+        this.tossOrderId = tossOrderId;
+        this.paymentKey = paymentKey;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -34,6 +39,8 @@ public class PaymentResponse {
                 payment.getOrderId(),
                 payment.getStatus(),
                 payment.getAmount(),
+                payment.getTossOrderId(),
+                payment.getPaymentKey(),
                 payment.getCreatedAt(),
                 payment.getUpdatedAt()
         );

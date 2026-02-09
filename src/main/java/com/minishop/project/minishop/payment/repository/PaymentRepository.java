@@ -27,4 +27,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("SELECT p FROM Payment p WHERE p.id = :paymentId AND p.userId = :userId")
     Optional<Payment> findByIdAndUserId(@Param("paymentId") Long paymentId,
                                         @Param("userId") Long userId);
+
+    /**
+     * 토스 주문 ID로 결제 조회 (confirm 시 사용)
+     */
+    Optional<Payment> findByTossOrderId(String tossOrderId);
 }
