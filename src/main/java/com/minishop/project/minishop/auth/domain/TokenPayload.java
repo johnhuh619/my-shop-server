@@ -13,16 +13,18 @@ public class TokenPayload {
     private String role;
     private Instant issuedAt;
     private Instant expiresAt;
+    private String jti;
 
-    private TokenPayload(Long userId, String role, Instant issuedAt, Instant expiresAt) {
+    private TokenPayload(Long userId, String role, Instant issuedAt, Instant expiresAt, String jti) {
         this.userId = userId;
         this.role = role;
         this.issuedAt = issuedAt;
         this.expiresAt = expiresAt;
+        this.jti = jti;
     }
 
-    public static TokenPayload of(Long userId, String role, Instant issuedAt, Instant expiresAt) {
-        return new TokenPayload(userId, role, issuedAt, expiresAt);
+    public static TokenPayload of(Long userId, String role, Instant issuedAt, Instant expiresAt, String jti) {
+        return new TokenPayload(userId, role, issuedAt, expiresAt, jti);
     }
 
     public boolean isExpired() {

@@ -2,9 +2,14 @@ package com.minishop.project.minishop.auth.controller;
 
 import com.minishop.project.minishop.auth.dto.LoginRequest;
 import com.minishop.project.minishop.auth.dto.LoginResponse;
+import com.minishop.project.minishop.auth.dto.LogoutRequest;
+import com.minishop.project.minishop.auth.dto.RefreshTokenRequest;
+import com.minishop.project.minishop.auth.dto.RefreshTokenResponse;
 import com.minishop.project.minishop.auth.service.AuthService;
 import com.minishop.project.minishop.common.response.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,12 +28,25 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ApiResponse<?> logout() {
-        // TODO: Implement logout logic later
-        // Options to consider:
-        // 1. Client-side only (stateless, simple)
-        // 2. Token blacklist with Redis (immediate invalidation)
-        // 3. Token version management in DB (per-user invalidation)
+    public ApiResponse<?> logout(HttpServletRequest request,
+                                  @RequestBody(required = false) LogoutRequest logoutRequest) {
+        String accessToken = extractToken(request);
+        String refreshToken = logoutRequest != null ? logoutRequest.getRefreshToken() : null;
+        authService.logout(accessToken, refreshToken);
         return ApiResponse.success(null);
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<RefreshTokenResponse> refresh(@RequestBody RefreshTokenRequest request) {
+        String newAccessToken = authService.refreshAccessToken(request.getRefreshToken());
+        return ApiResponse.success(RefreshTokenResponse.of(newAccessToken));
+    }
+
+    private String extractToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
     }
 }

@@ -2,6 +2,7 @@ package com.minishop.project.minishop.common.filter;
 
 import com.minishop.project.minishop.auth.domain.AuthenticatedUser;
 import com.minishop.project.minishop.auth.domain.TokenPayload;
+import com.minishop.project.minishop.auth.service.TokenBlacklistService;
 import com.minishop.project.minishop.auth.service.TokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -27,6 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final TokenService tokenService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -37,24 +39,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null) {
             try {
                 TokenPayload payload = tokenService.validateAccessToken(token);
-                AuthenticatedUser authenticatedUser = AuthenticatedUser.of(
-                        payload.getUserId(),
-                        payload.getRole()
-                );
 
-                // Create GrantedAuthority based on role
-                List<SimpleGrantedAuthority> authorities = List.of(
-                        new SimpleGrantedAuthority("ROLE_" + payload.getRole())
-                );
+                if (payload.getJti() != null && tokenBlacklistService.isBlacklisted(payload.getJti())) {
+                    SecurityContextHolder.clearContext();
+                } else {
+                    AuthenticatedUser authenticatedUser = AuthenticatedUser.of(
+                            payload.getUserId(),
+                            payload.getRole()
+                    );
 
-                Authentication authentication = new UsernamePasswordAuthenticationToken(
-                        authenticatedUser,
-                        null,
-                        authorities
-                );
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                    List<SimpleGrantedAuthority> authorities = List.of(
+                            new SimpleGrantedAuthority("ROLE_" + payload.getRole())
+                    );
+
+                    Authentication authentication = new UsernamePasswordAuthenticationToken(
+                            authenticatedUser,
+                            null,
+                            authorities
+                    );
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             } catch (Exception e) {
-                // Invalid token - continue without authentication
                 SecurityContextHolder.clearContext();
             }
         }
