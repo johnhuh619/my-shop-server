@@ -60,6 +60,9 @@ public class PaymentEventListener {
                 log.info("Inventory released: productId={}, quantity={}",
                         item.productId(), item.quantity());
             }
+
+            orderService.cancelOrderBySystem(event.getOrderId());
+            log.info("Order canceled due to payment failure: orderId={}", event.getOrderId());
         } catch (Exception e) {
             log.error("Failed to handle PaymentFailedEvent: orderId={}, error={}",
                     event.getOrderId(), e.getMessage(), e);

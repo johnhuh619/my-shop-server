@@ -5,6 +5,7 @@ import com.minishop.project.minishop.order.domain.OrderStatus;
 import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import java.util.List;
  * - 재고 예약 해제
  * - 주문 상태를 EXPIRED로 변경
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OrderExpirationScheduler {
@@ -45,9 +47,7 @@ public class OrderExpirationScheduler {
             try {
                 orderService.expireOrder(order.getId());
             } catch (Exception e) {
-                // 로그 기록 후 계속 진행
-                // TODO: 로깅 추가
-                System.err.println("Failed to expire order: " + order.getId() + ", error: " + e.getMessage());
+                log.error("Failed to expire order: orderId={}, error={}", order.getId(), e.getMessage(), e);
             }
         }
     }

@@ -5,6 +5,7 @@ import com.minishop.project.minishop.common.exception.ErrorCode;
 import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.order.domain.Order;
 import com.minishop.project.minishop.order.domain.OrderItem;
+import com.minishop.project.minishop.order.domain.OrderStatus;
 import com.minishop.project.minishop.order.dto.OrderItemRequest;
 import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.product.domain.Product;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -28,16 +30,17 @@ public class OrderService {
     public Order createOrder(Long userId, List<OrderItemRequest> itemRequests) {
         validateOrderRequest(itemRequests);
 
+        // Normalize lock acquisition order to reduce deadlock risk.
+        List<OrderItemRequest> sortedRequests = itemRequests.stream()
+                .sorted(Comparator.comparing(OrderItemRequest::getProductId))
+                .toList();
+
         List<OrderItem> orderItems = new ArrayList<>();
 
-        for (OrderItemRequest request : itemRequests) {
-            // 1. Product 스냅샷 데이터 획득
+        for (OrderItemRequest request : sortedRequests) {
             Product product = productService.getProductById(request.getProductId());
-
-            // 2. Inventory 예약 (PESSIMISTIC_WRITE lock)
             inventoryService.reserve(request.getProductId(), request.getQuantity());
 
-            // 3. OrderItem 생성 (스냅샷)
             OrderItem orderItem = OrderItem.create(
                     product.getId(),
                     product.getName(),
@@ -47,7 +50,6 @@ public class OrderService {
             orderItems.add(orderItem);
         }
 
-        // 4. Order 생성 및 저장 (CASCADE로 OrderItems도 저장)
         Order order = Order.create(userId, orderItems);
         return orderRepository.save(order);
     }
@@ -57,7 +59,6 @@ public class OrderService {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        // 각 OrderItem의 재고 반환
         for (OrderItem item : order.getOrderItems()) {
             inventoryService.release(item.getProductId(), item.getQuantity());
         }
@@ -91,7 +92,6 @@ public class OrderService {
         Order order = orderRepository.findByIdWithLock(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        // 결제 완료 시 재고 확정
         for (OrderItem item : order.getOrderItems()) {
             inventoryService.confirm(item.getProductId(), item.getQuantity());
         }
@@ -101,8 +101,7 @@ public class OrderService {
     }
 
     /**
-     * 내부용 메서드 - userId 검증 없이 Order 조회
-     * Payment 실패 보상, Refund 등에서 사용
+     * Internal method for workflows that don't require user ownership checks.
      */
     @Transactional(readOnly = true)
     public Order getOrderById(Long orderId) {
@@ -115,16 +114,32 @@ public class OrderService {
         Order order = orderRepository.findByIdWithLock(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        if (order.getStatus() != com.minishop.project.minishop.order.domain.OrderStatus.CREATED) {
-            return; // 이미 처리됨
+        if (order.getStatus() != OrderStatus.CREATED) {
+            return;
         }
 
-        // 재고 해제
         for (OrderItem item : order.getOrderItems()) {
             inventoryService.release(item.getProductId(), item.getQuantity());
         }
 
         order.expire();
+        orderRepository.save(order);
+    }
+
+    /**
+     * Called by system flows after payment failure.
+     * Inventory release is handled by PaymentEventListener, so this only updates order status.
+     */
+    @Transactional
+    public void cancelOrderBySystem(Long orderId) {
+        Order order = orderRepository.findByIdWithLock(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() != OrderStatus.CREATED) {
+            return;
+        }
+
+        order.cancel();
         orderRepository.save(order);
     }
 
