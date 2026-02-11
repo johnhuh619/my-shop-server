@@ -8,15 +8,13 @@ import com.minishop.project.minishop.order.domain.OrderStatus;
 import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.order.service.OrderService;
 import com.minishop.project.minishop.payment.domain.Payment;
-import com.minishop.project.minishop.payment.domain.PaymentStatus;
 import com.minishop.project.minishop.payment.dto.TossCancelResponse;
-import com.minishop.project.minishop.payment.event.PaymentCompletedEvent;
-import com.minishop.project.minishop.payment.event.PaymentFailedEvent;
 import com.minishop.project.minishop.payment.gateway.PaymentGateway;
 import com.minishop.project.minishop.payment.repository.PaymentRepository;
+import com.minishop.project.minishop.payment.service.PaymentConfirmHandler.ConfirmPreparation;
+import com.minishop.project.minishop.payment.service.PaymentConfirmHandler.ConfirmPreparationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +31,7 @@ public class PaymentService {
     private final OrderService orderService;
     private final OrderRepository orderRepository;
     private final PaymentGateway paymentGateway;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PaymentConfirmHandler confirmHandler;
 
     @Transactional
     public Payment preparePayment(Long userId, Long orderId, String idempotencyKey) {
@@ -76,58 +74,26 @@ public class PaymentService {
         }
     }
 
-    @Transactional(noRollbackFor = BusinessException.class)
     public Payment confirmPayment(Long userId, String paymentKey, String tossOrderId, Long amount) {
-        // 1. Payment 조회 by tossOrderId
-        Payment payment = paymentRepository.findByTossOrderId(tossOrderId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+        ConfirmPreparation preparation = confirmHandler.prepareConfirm(userId, paymentKey, tossOrderId, amount);
 
-        // 2. 소유권 검증
-        if (!payment.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.PAYMENT_NOT_FOUND);
+        if (preparation.type() == ConfirmPreparationType.COMPLETED) {
+            return preparation.payment();
         }
-
-        // 3. 이미 완료된 결제 → 멱등성 반환
-        if (payment.getStatus() == PaymentStatus.COMPLETED) {
-            return payment;
+        if (preparation.type() == ConfirmPreparationType.IN_PROGRESS) {
+            return confirmHandler.waitForCompletion(userId, tossOrderId);
         }
-
-        // 4. 상태 검증 (REQUESTED만 허용)
-        if (payment.getStatus() != PaymentStatus.REQUESTED) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
-                    "Payment can only be confirmed when status is REQUESTED");
-        }
-
-        // 5. 금액 검증 (위변조 방지)
-        payment.validateAmount(amount);
-
-        // 6. paymentKey 저장
-        payment.assignPaymentKey(paymentKey);
 
         try {
-            // 7. 동기 PG 호출
+            // External call must be outside DB transaction to minimize lock holding time.
             paymentGateway.confirmPayment(paymentKey, tossOrderId, amount);
-
-            // 8. 성공 처리
-            payment.markAsCompleted();
-            paymentRepository.save(payment);
-
-            // 9. 이벤트 발행 (AFTER_COMMIT)
-            eventPublisher.publishEvent(PaymentCompletedEvent.from(payment));
-
-            return payment;
-
         } catch (Exception e) {
             log.error("PG confirm failed: tossOrderId={}, error={}", tossOrderId, e.getMessage());
-
-            payment.markAsFailed();
-            paymentRepository.save(payment);
-
-            // 실패 이벤트: OrderItem 스냅샷 조회 후 발행
-            eventPublisher.publishEvent(buildPaymentFailedEvent(payment));
-
+            confirmHandler.finalizeConfirmFailure(userId, tossOrderId);
             throw new BusinessException(ErrorCode.PG_CONFIRM_FAILED, e.getMessage());
         }
+
+        return confirmHandler.finalizeConfirmSuccess(userId, tossOrderId);
     }
 
     @Transactional(readOnly = true)
@@ -172,11 +138,5 @@ public class PaymentService {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
                     "Order must be in CREATED status to process payment");
         }
-    }
-
-    private PaymentFailedEvent buildPaymentFailedEvent(Payment payment) {
-        Order order = orderRepository.findByIdWithItems(payment.getOrderId())
-                .orElseThrow(() -> new RuntimeException("Order not found: " + payment.getOrderId()));
-        return PaymentFailedEvent.from(payment, order.getOrderItems());
     }
 }
