@@ -1,7 +1,9 @@
 package com.minishop.project.minishop.payment.repository;
 
 import com.minishop.project.minishop.payment.domain.Payment;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -32,4 +34,11 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
      * 토스 주문 ID로 결제 조회 (confirm 시 사용)
      */
     Optional<Payment> findByTossOrderId(String tossOrderId);
+
+    /**
+     * 토스 주문 ID로 결제 조회 + PESSIMISTIC_WRITE lock (confirm 동시성 보호)
+     */
+    @Query("SELECT p FROM Payment p WHERE p.tossOrderId = :tossOrderId")
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Payment> findByTossOrderIdWithLock(@Param("tossOrderId") String tossOrderId);
 }

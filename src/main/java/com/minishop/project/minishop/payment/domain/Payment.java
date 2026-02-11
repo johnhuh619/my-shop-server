@@ -95,6 +95,20 @@ public class Payment {
         this.updatedAt = Instant.now();
     }
 
+    public void startProcessing(String paymentKey) {
+        if (this.status != PaymentStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                    "Payment can only start processing when status is REQUESTED");
+        }
+        if (this.paymentKey != null && !this.paymentKey.equals(paymentKey)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_PAYMENT,
+                    "Payment key already assigned with different value");
+        }
+        this.paymentKey = paymentKey;
+        this.status = PaymentStatus.PROCESSING;
+        this.updatedAt = Instant.now();
+    }
+
     public void validateAmount(Long requestedAmount) {
         if (!this.amount.equals(requestedAmount)) {
             throw new BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH,
@@ -103,18 +117,18 @@ public class Payment {
     }
 
     public void markAsCompleted() {
-        if (this.status != PaymentStatus.REQUESTED) {
+        if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.PROCESSING) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
-                    "Payment can only be completed when status is REQUESTED");
+                    "Payment can only be completed when status is REQUESTED or PROCESSING");
         }
         this.status = PaymentStatus.COMPLETED;
         this.updatedAt = Instant.now();
     }
 
     public void markAsFailed() {
-        if (this.status != PaymentStatus.REQUESTED) {
+        if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.PROCESSING) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
-                    "Payment can only be failed when status is REQUESTED");
+                    "Payment can only be failed when status is REQUESTED or PROCESSING");
         }
         this.status = PaymentStatus.FAILED;
         this.updatedAt = Instant.now();
