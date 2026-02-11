@@ -6,6 +6,7 @@ import com.minishop.project.minishop.refund.domain.Refund;
 import com.minishop.project.minishop.refund.dto.CreateRefundRequest;
 import com.minishop.project.minishop.refund.dto.RefundResponse;
 import com.minishop.project.minishop.refund.service.RefundService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,7 +20,7 @@ public class RefundController {
     private final RefundService refundService;
 
     @PostMapping
-    public ApiResponse<RefundResponse> processRefund(@RequestBody CreateRefundRequest request) {
+    public ApiResponse<RefundResponse> processRefund(@Valid @RequestBody CreateRefundRequest request) {
         Long userId = AuthenticationContext.getCurrentUserId();
         Refund refund = refundService.processRefund(
                 userId,

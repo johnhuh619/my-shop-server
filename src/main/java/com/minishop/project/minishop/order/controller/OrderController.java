@@ -6,6 +6,7 @@ import com.minishop.project.minishop.order.domain.Order;
 import com.minishop.project.minishop.order.dto.CreateOrderRequest;
 import com.minishop.project.minishop.order.dto.OrderResponse;
 import com.minishop.project.minishop.order.service.OrderService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,7 +20,7 @@ public class OrderController {
     private final OrderService orderService;
 
     @PostMapping
-    public ApiResponse<OrderResponse> createOrder(@RequestBody CreateOrderRequest request) {
+    public ApiResponse<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
         Long userId = AuthenticationContext.getCurrentUserId();
         Order order = orderService.createOrder(userId, request.getItems());
         return ApiResponse.success(OrderResponse.from(order));

@@ -10,6 +10,7 @@ import com.minishop.project.minishop.payment.dto.CreatePaymentRequest;
 import com.minishop.project.minishop.payment.dto.PaymentResponse;
 import com.minishop.project.minishop.payment.dto.PreparePaymentResponse;
 import com.minishop.project.minishop.payment.service.PaymentService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,7 +26,7 @@ public class PaymentController {
     @PostMapping
     public ApiResponse<PreparePaymentResponse> preparePayment(
             @RequestHeader(value = "X-Idempotency-Key") String idempotencyKey,
-            @RequestBody CreatePaymentRequest request) {
+            @Valid @RequestBody CreatePaymentRequest request) {
 
         if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE,
@@ -40,7 +41,7 @@ public class PaymentController {
 
     @PostMapping("/confirm")
     public ApiResponse<PaymentResponse> confirmPayment(
-            @RequestBody ConfirmPaymentRequest request) {
+            @Valid @RequestBody ConfirmPaymentRequest request) {
 
         Long userId = AuthenticationContext.getCurrentUserId();
         Payment payment = paymentService.confirmPayment(
