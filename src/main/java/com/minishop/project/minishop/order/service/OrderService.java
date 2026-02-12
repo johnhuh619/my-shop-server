@@ -59,9 +59,9 @@ public class OrderService {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        for (OrderItem item : order.getOrderItems()) {
-            inventoryService.release(item.getProductId(), item.getQuantity());
-        }
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.release(item.getProductId(), item.getQuantity()));
 
         order.cancel();
         return orderRepository.save(order);
@@ -92,9 +92,9 @@ public class OrderService {
         Order order = orderRepository.findByIdWithLock(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        for (OrderItem item : order.getOrderItems()) {
-            inventoryService.confirm(item.getProductId(), item.getQuantity());
-        }
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.confirm(item.getProductId(), item.getQuantity()));
 
         order.complete();
         return orderRepository.save(order);
@@ -118,9 +118,9 @@ public class OrderService {
             return;
         }
 
-        for (OrderItem item : order.getOrderItems()) {
-            inventoryService.release(item.getProductId(), item.getQuantity());
-        }
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.release(item.getProductId(), item.getQuantity()));
 
         order.expire();
         orderRepository.save(order);
@@ -128,7 +128,8 @@ public class OrderService {
 
     /**
      * Called by system flows after payment failure.
-     * Inventory release is handled by PaymentEventListener, so this only updates order status.
+     * Releases reserved inventory and cancels the order atomically.
+     * Idempotent: skips if order is not in CREATED status.
      */
     @Transactional
     public void cancelOrderBySystem(Long orderId) {
@@ -138,6 +139,10 @@ public class OrderService {
         if (order.getStatus() != OrderStatus.CREATED) {
             return;
         }
+
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.release(item.getProductId(), item.getQuantity()));
 
         order.cancel();
         orderRepository.save(order);

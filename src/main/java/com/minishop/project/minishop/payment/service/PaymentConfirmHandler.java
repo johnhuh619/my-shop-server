@@ -2,8 +2,6 @@ package com.minishop.project.minishop.payment.service;
 
 import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
-import com.minishop.project.minishop.order.domain.Order;
-import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.payment.domain.Payment;
 import com.minishop.project.minishop.payment.domain.PaymentStatus;
 import com.minishop.project.minishop.payment.event.PaymentCompletedEvent;
@@ -26,7 +24,6 @@ class PaymentConfirmHandler {
     private static final long CONFIRM_POLL_INTERVAL_MILLIS = 50;
 
     private final PaymentRepository paymentRepository;
-    private final OrderRepository orderRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
 
@@ -140,7 +137,7 @@ class PaymentConfirmHandler {
 
         payment.markAsFailed();
         Payment saved = paymentRepository.save(payment);
-        eventPublisher.publishEvent(buildPaymentFailedEvent(saved));
+        eventPublisher.publishEvent(PaymentFailedEvent.from(saved));
     }
 
     Payment waitForCompletion(Long userId, String tossOrderId) {
@@ -173,11 +170,5 @@ class PaymentConfirmHandler {
         }
 
         throw new BusinessException(ErrorCode.PG_CONFIRM_FAILED, "Payment confirmation timed out");
-    }
-
-    private PaymentFailedEvent buildPaymentFailedEvent(Payment payment) {
-        Order order = orderRepository.findByIdWithItems(payment.getOrderId())
-                .orElseThrow(() -> new RuntimeException("Order not found: " + payment.getOrderId()));
-        return PaymentFailedEvent.from(payment, order.getOrderItems());
     }
 }

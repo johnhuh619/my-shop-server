@@ -1,6 +1,5 @@
 package com.minishop.project.minishop.payment.event;
 
-import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +14,7 @@ import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMI
  *
  * confirm 이후 후속 처리를 비동기로 수행
  * - PaymentCompletedEvent: Order 상태 변경 (CREATED → PAID)
- * - PaymentFailedEvent: 재고 해제
+ * - PaymentFailedEvent: 재고 해제 + 주문 취소
  */
 @Slf4j
 @Component
@@ -23,7 +22,6 @@ import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMI
 public class PaymentEventListener {
 
     private final OrderService orderService;
-    private final InventoryService inventoryService;
 
     /**
      * 결제 완료 이벤트 처리
@@ -46,7 +44,7 @@ public class PaymentEventListener {
 
     /**
      * 결제 실패 이벤트 처리
-     * - 예약된 재고 해제
+     * - 재고 해제 + 주문 취소 (cancelOrderBySystem이 원자적으로 처리)
      */
     @TransactionalEventListener(phase = AFTER_COMMIT)
     @Async
@@ -55,12 +53,6 @@ public class PaymentEventListener {
                 Thread.currentThread().getName(), event.getOrderId(), event.getPaymentId());
 
         try {
-            for (PaymentFailedEvent.OrderItemSnapshot item : event.getOrderItems()) {
-                inventoryService.release(item.productId(), item.quantity());
-                log.info("Inventory released: productId={}, quantity={}",
-                        item.productId(), item.quantity());
-            }
-
             orderService.cancelOrderBySystem(event.getOrderId());
             log.info("Order canceled due to payment failure: orderId={}", event.getOrderId());
         } catch (Exception e) {
