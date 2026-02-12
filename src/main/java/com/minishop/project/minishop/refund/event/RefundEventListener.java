@@ -46,8 +46,10 @@ public class RefundEventListener {
             }
 
             // RefundItem 기반 재고 복구
+            // 결제 성공 시점에 reserved -> consumed(confirm) 되므로,
+            // 환불 복구는 reserved 해제가 아니라 available 재입고(addStock)여야 한다.
             for (RefundCompletedEvent.RefundItemSnapshot item : event.getRefundItems()) {
-                inventoryService.release(item.productId(), item.quantity());
+                inventoryService.addStock(item.productId(), item.quantity());
                 log.info("Inventory restored: productId={}, quantity={}",
                         item.productId(), item.quantity());
             }

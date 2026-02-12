@@ -297,6 +297,29 @@ class OrderServiceTest {
         assertThat(inventory.getTotalQuantity()).isEqualTo(5L); // 5개 소비됨
     }
 
+    @Test
+    void markAsPaid_중복호출_멱등처리됨() {
+        // Given
+        Product product = createProduct("Test Product", 10000L);
+        inventoryService.addStock(product.getId(), 10L);
+        Order order = orderService.createOrder(testUserId, List.of(
+                new OrderItemRequest(product.getId(), 5L)
+        ));
+
+        // When
+        Order first = orderService.markAsPaid(order.getId());
+        Order second = orderService.markAsPaid(order.getId());
+
+        // Then
+        assertThat(first.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(second.getStatus()).isEqualTo(OrderStatus.PAID);
+
+        Inventory inventory = inventoryService.getByProductId(product.getId());
+        assertThat(inventory.getQuantityAvailable()).isEqualTo(5L);
+        assertThat(inventory.getQuantityReserved()).isEqualTo(0L);
+        assertThat(inventory.getTotalQuantity()).isEqualTo(5L);
+    }
+
     // ============================================
     // 주문 만료 테스트
     // ============================================

@@ -83,6 +83,22 @@ public class OrderService {
         Order order = orderRepository.findByIdWithLock(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
+        if (order.getStatus() == OrderStatus.PAID
+                || order.getStatus() == OrderStatus.COMPLETED
+                || order.getStatus() == OrderStatus.REFUND_REQUESTED
+                || order.getStatus() == OrderStatus.REFUNDED) {
+            return order;
+        }
+
+        if (order.getStatus() != OrderStatus.CREATED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                    "Order can only be marked as paid when status is CREATED");
+        }
+
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.confirm(item.getProductId(), item.getQuantity()));
+
         order.markAsPaid();
         return orderRepository.save(order);
     }
@@ -92,9 +108,9 @@ public class OrderService {
         Order order = orderRepository.findByIdWithLock(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        order.getOrderItems().stream()
-                .sorted(Comparator.comparing(OrderItem::getProductId))
-                .forEach(item -> inventoryService.confirm(item.getProductId(), item.getQuantity()));
+        if (order.getStatus() == OrderStatus.COMPLETED) {
+            return order;
+        }
 
         order.complete();
         return orderRepository.save(order);

@@ -197,10 +197,15 @@ class PaymentServiceTest {
                 testUserId, "test-payment-key", prepared.getTossOrderId(), 20000L
         );
 
-        // Then: 비동기 이벤트로 Order PAID 전이
+        // Then: 비동기 이벤트로 Order PAID 전이 + 재고 확정
         await().atMost(5, SECONDS).untilAsserted(() -> {
             Order paidOrder = orderService.getOrder(order.getId(), testUserId);
             assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+
+            Inventory inventory = inventoryService.getByProductId(product.getId());
+            assertThat(inventory.getQuantityAvailable()).isEqualTo(8L);
+            assertThat(inventory.getQuantityReserved()).isEqualTo(0L);
+            assertThat(inventory.getTotalQuantity()).isEqualTo(8L);
         });
     }
 
@@ -546,10 +551,15 @@ class PaymentServiceTest {
         assertThat(confirmed.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(confirmed.getPaymentKey()).isEqualTo("toss-pk-123");
 
-        // Step 3: 비동기 이벤트 - Order PAID
+        // Step 3: 비동기 이벤트 - Order PAID + 재고 확정
         await().atMost(5, SECONDS).untilAsserted(() -> {
             Order paidOrder = orderService.getOrder(order.getId(), testUserId);
             assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+
+            Inventory inventory = inventoryService.getByProductId(product.getId());
+            assertThat(inventory.getQuantityAvailable()).isEqualTo(8L);
+            assertThat(inventory.getQuantityReserved()).isEqualTo(0L);
+            assertThat(inventory.getTotalQuantity()).isEqualTo(8L);
         });
     }
 
