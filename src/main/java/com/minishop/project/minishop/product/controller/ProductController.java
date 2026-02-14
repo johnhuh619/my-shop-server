@@ -1,15 +1,18 @@
 package com.minishop.project.minishop.product.controller;
 
 import com.minishop.project.minishop.common.response.ApiResponse;
+import com.minishop.project.minishop.common.response.PageResponse;
 import com.minishop.project.minishop.product.domain.Product;
 import com.minishop.project.minishop.product.dto.CreateProductRequest;
 import com.minishop.project.minishop.product.dto.ProductResponse;
+import com.minishop.project.minishop.product.dto.ProductWithStock;
 import com.minishop.project.minishop.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/products")
@@ -30,16 +33,20 @@ public class ProductController {
 
     @GetMapping("/{id}")
     public ApiResponse<ProductResponse> getProduct(@PathVariable Long id) {
-        Product product = productService.getProductById(id);
-        return ApiResponse.success(ProductResponse.from(product));
+        ProductWithStock pws = productService.getActiveProductWithStock(id);
+        return ApiResponse.success(ProductResponse.from(pws.product(), pws.quantityAvailable()));
     }
 
     @GetMapping
-    public ApiResponse<List<ProductResponse>> getActiveProducts() {
-        List<Product> products = productService.getActiveProducts();
-        List<ProductResponse> responses = products.stream()
-                .map(ProductResponse::from)
-                .collect(Collectors.toList());
-        return ApiResponse.success(responses);
+    public ApiResponse<PageResponse<ProductResponse>> getActiveProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String keyword) {
+        int safeSize = Math.min(size, 50);
+        Pageable pageable = PageRequest.of(page, safeSize, Sort.by("createdAt").descending());
+        Page<ProductWithStock> result = productService.getActiveProductsWithStock(keyword, pageable);
+        PageResponse<ProductResponse> response = PageResponse.of(result,
+                pws -> ProductResponse.from(pws.product(), pws.quantityAvailable()));
+        return ApiResponse.success(response);
     }
 }
