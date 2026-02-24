@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -14,8 +15,11 @@ import java.util.Locale;
 
 @Slf4j
 @Component
+@Profile({"default", "dev", "docker"})
 @RequiredArgsConstructor
 public class PostgresTrigramIndexInitializer implements ApplicationRunner {
+    // TODO(minishop-ddl): Development convenience only.
+    // Remove this initializer after pg_trgm extension/index are managed by migration SQL.
 
     private static final String CREATE_EXTENSION_SQL = "CREATE EXTENSION IF NOT EXISTS pg_trgm";
     private static final String CREATE_INDEX_SQL = """
