@@ -44,7 +44,11 @@ public enum ErrorCode {
     REFUND_QUANTITY_EXCEEDED("R006", "Refund quantity exceeds available quantity"),
 
     // OrderItem
-    ORDER_ITEM_NOT_FOUND("OI001", "Order item not found");
+    ORDER_ITEM_NOT_FOUND("OI001", "Order item not found"),
+
+    // Delivery
+    DELIVERY_NOT_FOUND("D001", "Delivery not found"),
+    INVALID_DELIVERY_STATUS("D002", "Invalid delivery status");
 
     private final String code;
     private final String message;
