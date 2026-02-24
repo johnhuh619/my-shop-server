@@ -2,8 +2,6 @@ package com.minishop.project.minishop.product.controller;
 
 import com.minishop.project.minishop.common.response.ApiResponse;
 import com.minishop.project.minishop.common.response.PageResponse;
-import com.minishop.project.minishop.product.domain.Product;
-import com.minishop.project.minishop.product.dto.CreateProductRequest;
 import com.minishop.project.minishop.product.dto.ProductResponse;
 import com.minishop.project.minishop.product.dto.ProductWithStock;
 import com.minishop.project.minishop.product.service.ProductService;
@@ -20,16 +18,6 @@ import org.springframework.web.bind.annotation.*;
 public class ProductController {
 
     private final ProductService productService;
-
-    @PostMapping
-    public ApiResponse<ProductResponse> createProduct(@RequestBody CreateProductRequest request) {
-        Product product = productService.createProduct(
-                request.getName(),
-                request.getDescription(),
-                request.getUnitPrice()
-        );
-        return ApiResponse.success(ProductResponse.from(product));
-    }
 
     @GetMapping("/{id}")
     public ApiResponse<ProductResponse> getProduct(@PathVariable Long id) {
