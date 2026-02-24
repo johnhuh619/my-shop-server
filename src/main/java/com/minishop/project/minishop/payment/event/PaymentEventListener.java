@@ -1,6 +1,7 @@
 package com.minishop.project.minishop.payment.event;
 
 import com.minishop.project.minishop.order.service.OrderService;
+import com.minishop.project.minishop.outbox.service.RetryTaskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -15,6 +16,8 @@ import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMI
  * confirm 이후 후속 처리를 비동기로 수행
  * - PaymentCompletedEvent: Order 상태 변경 (CREATED → PAID)
  * - PaymentFailedEvent: 재고 해제 + 주문 취소
+ *
+ * 실패 시 RetryTaskService에 등록하여 스케줄러가 재시도한다.
  */
 @Slf4j
 @Component
@@ -22,6 +25,7 @@ import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMI
 public class PaymentEventListener {
 
     private final OrderService orderService;
+    private final RetryTaskService retryTaskService;
 
     /**
      * 결제 완료 이벤트 처리
@@ -39,6 +43,8 @@ public class PaymentEventListener {
         } catch (Exception e) {
             log.error("Failed to handle PaymentCompletedEvent: orderId={}, error={}",
                     event.getOrderId(), e.getMessage(), e);
+            retryTaskService.register("MARK_AS_PAID",
+                    "{\"orderId\":" + event.getOrderId() + "}");
         }
     }
 
@@ -58,6 +64,8 @@ public class PaymentEventListener {
         } catch (Exception e) {
             log.error("Failed to handle PaymentFailedEvent: orderId={}, error={}",
                     event.getOrderId(), e.getMessage(), e);
+            retryTaskService.register("CANCEL_ORDER",
+                    "{\"orderId\":" + event.getOrderId() + "}");
         }
     }
 }
