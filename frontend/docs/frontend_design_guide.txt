@@ -1,0 +1,89 @@
+﻿Mini-Shop Frontend Design Guide
+
+Purpose
+- Define project-specific UI direction for mini-shop frontend.
+- Keep this guide stable and concise.
+- Use seed_docs MCP as a supporting source when details are missing.
+
+Important Model Behavior
+- seed_docs MCP does NOT automatically read this file.
+- The LLM/agent reads this file first, then decides whether to call seed_docs MCP.
+- This file defines project policy; MCP provides external reference details.
+
+Priority Order
+1) ../docs/API_SPEC.md (data contract and behavior)
+2) frontend/docs/frontend_design_guide.txt (project design policy)
+3) seed_docs MCP references (component/foundation details)
+
+Visual Direction
+- Tone: practical commerce UI, clean and information-dense.
+- Emphasis: clear hierarchy, fast task completion, predictable interactions.
+- Avoid decorative complexity that reduces scan speed.
+
+Layout Rules
+- Use responsive layouts for desktop and mobile.
+- Prefer clear section boundaries for: product, order, payment, refund, delivery.
+- Keep admin screens table/action focused; avoid consumer-style marketing layouts.
+- Prefer SEED layout primitives (`HStack`, `VStack`) for stable one-axis layouts.
+- For responsive axis changes (e.g., mobile column -> desktop row) or overflow-prone button groups, use native `div` with CSS grid/flex instead of forcing `HStack`.
+
+Typography Rules
+- Use consistent font scale and spacing.
+- Title, section heading, body, and helper text levels must be visually distinct.
+- Do not use ad-hoc per-page font sizes without a shared token.
+- Frontend default role mapping (seed_docs `foundation/typography/overview` based):
+  - `pageTitle`: `t7Bold`
+  - `sectionTitle`: `t6Bold`
+  - `cardTitle` / `keyValueStrong`: `t5Bold` or `t5Medium`
+  - `body`: `t4Regular` (`t4Medium` for emphasized body line)
+  - `helper` / `meta` / chip labels: `t3Regular`
+
+Color and State Rules
+- Define semantic colors: primary, success, warning, danger, neutral.
+- Status chips for enums must be consistent across pages.
+- Required statuses to map clearly: OrderStatus, PaymentStatus, RefundStatus, DeliveryStatus.
+
+Interaction Rules
+- Buttons and links must clearly indicate enabled/disabled/loading states.
+- Long-running flows (payment/refund/delivery updates) must show pending state and refresh path.
+- Dangerous actions require explicit confirmation.
+
+Form Rules
+- Validate inputs at field-level and submit-level.
+- Show API errorCode/errorMessage in user-friendly form while preserving debuggability.
+- Keep request payload fields aligned with API names.
+
+Accessibility Rules
+- All interactive controls need accessible names.
+- Ensure keyboard access for core workflows.
+- Preserve sufficient contrast for text and status indicators.
+
+Admin UX Rules
+- Optimize for operational speed: filters, concise rows, quick status actions.
+- Separate admin actions from customer pages.
+- Surface side-effect risk clearly for approve/reject/cancel/complete actions.
+
+When to Use seed_docs MCP
+Use seed_docs MCP when:
+- A component pattern is not defined in this guide.
+- You need official API/usage for SEED components.
+- You need foundation references (spacing, color, typography).
+
+Recommended MCP Query Order
+1) discover_seed_docs
+2) list_docs(section="docs" or "react", category as needed)
+3) get_doc for specific target path
+4) optionally list_icons/search_icons/get_icon_details for icon decisions
+
+Output Expectations for Implementation
+- For each new UI feature, document:
+  - selected layout pattern
+  - status mapping rules
+  - loading/error/empty states
+  - referenced design source (guide section and/or seed_docs path)
+
+Prohibitions
+- Do not invent new API field names.
+- Do not mix customer and admin action surfaces.
+- Do not hide async processing states.
+- Do not bypass auth/role constraints in UI routing.
