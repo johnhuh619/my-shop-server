@@ -6,6 +6,7 @@ import com.minishop.project.minishop.user.domain.User;
 import com.minishop.project.minishop.user.dto.UserRegisterRequest;
 import com.minishop.project.minishop.user.dto.UserResponse;
 import com.minishop.project.minishop.user.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,7 +17,7 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ApiResponse<UserResponse> registerUser(@RequestBody UserRegisterRequest request) {
+    public ApiResponse<UserResponse> registerUser(@Valid @RequestBody UserRegisterRequest request) {
         User user = userService.registerUser(
                 request.getEmail(),
                 request.getPassword(),

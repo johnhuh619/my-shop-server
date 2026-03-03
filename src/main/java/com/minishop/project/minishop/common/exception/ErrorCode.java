@@ -31,6 +31,9 @@ public enum ErrorCode {
     PAYMENT_NOT_FOUND("PAY001", "Payment not found"),
     DUPLICATE_PAYMENT("PAY002", "Duplicate payment"),
     PAYMENT_FAILED("PAY003", "Payment failed"),
+    PG_CONFIRM_FAILED("PAY004", "PG payment confirmation failed"),
+    PAYMENT_AMOUNT_MISMATCH("PAY005", "Payment amount mismatch"),
+    PG_REFUND_FAILED("PAY006", "PG payment refund failed"),
 
     // Refund
     REFUND_NOT_FOUND("R001", "Refund not found"),
@@ -41,7 +44,11 @@ public enum ErrorCode {
     REFUND_QUANTITY_EXCEEDED("R006", "Refund quantity exceeds available quantity"),
 
     // OrderItem
-    ORDER_ITEM_NOT_FOUND("OI001", "Order item not found");
+    ORDER_ITEM_NOT_FOUND("OI001", "Order item not found"),
+
+    // Delivery
+    DELIVERY_NOT_FOUND("D001", "Delivery not found"),
+    INVALID_DELIVERY_STATUS("D002", "Invalid delivery status");
 
     private final String code;
     private final String message;

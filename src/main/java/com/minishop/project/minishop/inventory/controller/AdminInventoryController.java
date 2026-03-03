@@ -6,12 +6,14 @@ import com.minishop.project.minishop.inventory.dto.AddStockRequest;
 import com.minishop.project.minishop.inventory.dto.InventoryResponse;
 import com.minishop.project.minishop.inventory.service.InventoryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/inventories")
+@RequestMapping("/api/admin/inventories")
 @RequiredArgsConstructor
-public class InventoryController {
+@PreAuthorize("hasRole('ADMIN')")
+public class AdminInventoryController {
 
     private final InventoryService inventoryService;
 

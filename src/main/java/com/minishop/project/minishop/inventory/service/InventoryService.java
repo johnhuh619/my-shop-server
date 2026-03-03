@@ -5,6 +5,10 @@ import com.minishop.project.minishop.common.exception.ErrorCode;
 import com.minishop.project.minishop.inventory.domain.Inventory;
 import com.minishop.project.minishop.inventory.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,6 +77,18 @@ public class InventoryService {
         Inventory inventory = inventoryRepository.findByProductId(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVENTORY_NOT_FOUND));
         return inventory.getQuantityAvailable();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, Long> getAvailableQuantities(List<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+        return inventoryRepository.findByProductIdIn(productIds).stream()
+                .collect(Collectors.toMap(
+                        Inventory::getProductId,
+                        Inventory::getQuantityAvailable
+                ));
     }
 
     @Transactional(readOnly = true)

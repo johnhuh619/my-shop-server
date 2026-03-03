@@ -5,6 +5,7 @@ import com.minishop.project.minishop.common.exception.ErrorCode;
 import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.order.domain.Order;
 import com.minishop.project.minishop.order.domain.OrderItem;
+import com.minishop.project.minishop.order.domain.OrderStatus;
 import com.minishop.project.minishop.order.dto.OrderItemRequest;
 import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.product.domain.Product;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -25,19 +27,22 @@ public class OrderService {
     private final InventoryService inventoryService;
 
     @Transactional
-    public Order createOrder(Long userId, List<OrderItemRequest> itemRequests) {
+    public Order createOrder(Long userId, List<OrderItemRequest> itemRequests,
+                             String recipientName, String recipientPhone,
+                             String address, String addressDetail, String zipCode) {
         validateOrderRequest(itemRequests);
+
+        // Normalize lock acquisition order to reduce deadlock risk.
+        List<OrderItemRequest> sortedRequests = itemRequests.stream()
+                .sorted(Comparator.comparing(OrderItemRequest::getProductId))
+                .toList();
 
         List<OrderItem> orderItems = new ArrayList<>();
 
-        for (OrderItemRequest request : itemRequests) {
-            // 1. Product 스냅샷 데이터 획득
+        for (OrderItemRequest request : sortedRequests) {
             Product product = productService.getProductById(request.getProductId());
-
-            // 2. Inventory 예약 (PESSIMISTIC_WRITE lock)
             inventoryService.reserve(request.getProductId(), request.getQuantity());
 
-            // 3. OrderItem 생성 (스냅샷)
             OrderItem orderItem = OrderItem.create(
                     product.getId(),
                     product.getName(),
@@ -47,8 +52,8 @@ public class OrderService {
             orderItems.add(orderItem);
         }
 
-        // 4. Order 생성 및 저장 (CASCADE로 OrderItems도 저장)
-        Order order = Order.create(userId, orderItems);
+        Order order = Order.create(userId, orderItems,
+                recipientName, recipientPhone, address, addressDetail, zipCode);
         return orderRepository.save(order);
     }
 
@@ -57,10 +62,9 @@ public class OrderService {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        // 각 OrderItem의 재고 반환
-        for (OrderItem item : order.getOrderItems()) {
-            inventoryService.release(item.getProductId(), item.getQuantity());
-        }
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.release(item.getProductId(), item.getQuantity()));
 
         order.cancel();
         return orderRepository.save(order);
@@ -77,10 +81,31 @@ public class OrderService {
         return orderRepository.findByUserId(userId);
     }
 
+    @Transactional(readOnly = true)
+    public List<Order> getOrdersByUserWithItems(Long userId) {
+        return orderRepository.findByUserIdWithItems(userId);
+    }
+
     @Transactional
     public Order markAsPaid(Long orderId) {
         Order order = orderRepository.findByIdWithLock(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() == OrderStatus.PAID
+                || order.getStatus() == OrderStatus.COMPLETED
+                || order.getStatus() == OrderStatus.REFUND_REQUESTED
+                || order.getStatus() == OrderStatus.REFUNDED) {
+            return order;
+        }
+
+        if (order.getStatus() != OrderStatus.CREATED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                    "Order can only be marked as paid when status is CREATED");
+        }
+
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.confirm(item.getProductId(), item.getQuantity()));
 
         order.markAsPaid();
         return orderRepository.save(order);
@@ -91,9 +116,8 @@ public class OrderService {
         Order order = orderRepository.findByIdWithLock(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        // 결제 완료 시 재고 확정
-        for (OrderItem item : order.getOrderItems()) {
-            inventoryService.confirm(item.getProductId(), item.getQuantity());
+        if (order.getStatus() == OrderStatus.COMPLETED) {
+            return order;
         }
 
         order.complete();
@@ -101,8 +125,7 @@ public class OrderService {
     }
 
     /**
-     * 내부용 메서드 - userId 검증 없이 Order 조회
-     * Payment 실패 보상, Refund 등에서 사용
+     * Internal method for workflows that don't require user ownership checks.
      */
     @Transactional(readOnly = true)
     public Order getOrderById(Long orderId) {
@@ -115,16 +138,37 @@ public class OrderService {
         Order order = orderRepository.findByIdWithLock(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        if (order.getStatus() != com.minishop.project.minishop.order.domain.OrderStatus.CREATED) {
-            return; // 이미 처리됨
+        if (order.getStatus() != OrderStatus.CREATED) {
+            return;
         }
 
-        // 재고 해제
-        for (OrderItem item : order.getOrderItems()) {
-            inventoryService.release(item.getProductId(), item.getQuantity());
-        }
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.release(item.getProductId(), item.getQuantity()));
 
         order.expire();
+        orderRepository.save(order);
+    }
+
+    /**
+     * Called by system flows after payment failure.
+     * Releases reserved inventory and cancels the order atomically.
+     * Idempotent: skips if order is not in CREATED status.
+     */
+    @Transactional
+    public void cancelOrderBySystem(Long orderId) {
+        Order order = orderRepository.findByIdWithLock(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() != OrderStatus.CREATED) {
+            return;
+        }
+
+        order.getOrderItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getProductId))
+                .forEach(item -> inventoryService.release(item.getProductId(), item.getQuantity()));
+
+        order.cancel();
         orderRepository.save(order);
     }
 

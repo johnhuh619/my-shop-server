@@ -5,7 +5,9 @@ import com.minishop.project.minishop.common.util.AuthenticationContext;
 import com.minishop.project.minishop.order.domain.Order;
 import com.minishop.project.minishop.order.dto.CreateOrderRequest;
 import com.minishop.project.minishop.order.dto.OrderResponse;
+import com.minishop.project.minishop.order.service.OrderQueryService;
 import com.minishop.project.minishop.order.service.OrderService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,29 +19,27 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+    private final OrderQueryService orderQueryService;
 
     @PostMapping
-    public ApiResponse<OrderResponse> createOrder(@RequestBody CreateOrderRequest request) {
+    public ApiResponse<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
         Long userId = AuthenticationContext.getCurrentUserId();
-        Order order = orderService.createOrder(userId, request.getItems());
+        Order order = orderService.createOrder(userId, request.getItems(),
+                request.getRecipientName(), request.getRecipientPhone(),
+                request.getAddress(), request.getAddressDetail(), request.getZipCode());
         return ApiResponse.success(OrderResponse.from(order));
     }
 
     @GetMapping
     public ApiResponse<List<OrderResponse>> getMyOrders() {
         Long userId = AuthenticationContext.getCurrentUserId();
-        List<Order> orders = orderService.getOrdersByUser(userId);
-        List<OrderResponse> responses = orders.stream()
-                .map(OrderResponse::from)
-                .toList();
-        return ApiResponse.success(responses);
+        return ApiResponse.success(orderQueryService.getOrderList(userId));
     }
 
     @GetMapping("/{id}")
     public ApiResponse<OrderResponse> getOrder(@PathVariable Long id) {
         Long userId = AuthenticationContext.getCurrentUserId();
-        Order order = orderService.getOrder(id, userId);
-        return ApiResponse.success(OrderResponse.from(order));
+        return ApiResponse.success(orderQueryService.getOrderDetail(id, userId));
     }
 
     @PatchMapping("/{id}/cancel")

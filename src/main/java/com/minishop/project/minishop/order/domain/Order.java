@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", indexes = {
+        @Index(name = "idx_orders_status_created_at", columnList = "status, createdAt")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order {
@@ -36,6 +38,21 @@ public class Order {
     private List<OrderItem> orderItems = new ArrayList<>();
 
     @Column(nullable = false, updatable = false)
+    private String recipientName;
+
+    @Column(nullable = false, updatable = false)
+    private String recipientPhone;
+
+    @Column(nullable = false, updatable = false)
+    private String address;
+
+    @Column(updatable = false)
+    private String addressDetail;
+
+    @Column(nullable = false, updatable = false)
+    private String zipCode;
+
+    @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(nullable = false)
@@ -43,21 +60,36 @@ public class Order {
 
     @Builder
     public Order(Long id, Long userId, OrderStatus status, Long totalAmount,
-                 List<OrderItem> orderItems, Instant createdAt, Instant updatedAt) {
+                 List<OrderItem> orderItems,
+                 String recipientName, String recipientPhone,
+                 String address, String addressDetail, String zipCode,
+                 Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.userId = userId;
         this.status = status != null ? status : OrderStatus.CREATED;
         this.totalAmount = totalAmount != null ? totalAmount : 0L;
         this.orderItems = orderItems != null ? orderItems : new ArrayList<>();
+        this.recipientName = recipientName;
+        this.recipientPhone = recipientPhone;
+        this.address = address;
+        this.addressDetail = addressDetail;
+        this.zipCode = zipCode;
         this.createdAt = createdAt != null ? createdAt : Instant.now();
         this.updatedAt = updatedAt != null ? updatedAt : Instant.now();
     }
 
-    public static Order create(Long userId, List<OrderItem> items) {
+    public static Order create(Long userId, List<OrderItem> items,
+                                String recipientName, String recipientPhone,
+                                String address, String addressDetail, String zipCode) {
         Order order = Order.builder()
                 .userId(userId)
                 .status(OrderStatus.CREATED)
                 .totalAmount(0L)
+                .recipientName(recipientName)
+                .recipientPhone(recipientPhone)
+                .address(address)
+                .addressDetail(addressDetail)
+                .zipCode(zipCode)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();

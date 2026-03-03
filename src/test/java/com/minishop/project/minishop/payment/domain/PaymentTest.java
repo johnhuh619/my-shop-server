@@ -28,6 +28,8 @@ class PaymentTest {
         assertThat(payment.getIdempotencyKey()).isEqualTo("idempotency-key-123");
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
         assertThat(payment.getAmount()).isEqualTo(50000L);
+        assertThat(payment.getTossOrderId()).startsWith("MINISHOP_1_");
+        assertThat(payment.getPaymentKey()).isNull();
         assertThat(payment.getCreatedAt()).isNotNull();
         assertThat(payment.getUpdatedAt()).isNotNull();
     }
@@ -42,6 +44,64 @@ class PaymentTest {
         assertThat(payment.getOrderId()).isEqualTo(5L);
         assertThat(payment.getIdempotencyKey()).isEqualTo("key-456");
         assertThat(payment.getAmount()).isEqualTo(99999L);
+        assertThat(payment.getTossOrderId()).matches("MINISHOP_5_[a-f0-9]{8}");
+    }
+
+    @Test
+    void create_tossOrderId_유니크생성() {
+        Payment p1 = Payment.create(100L, 1L, "key1", 10000L);
+        Payment p2 = Payment.create(100L, 1L, "key2", 10000L);
+        assertThat(p1.getTossOrderId()).isNotEqualTo(p2.getTossOrderId());
+    }
+
+    // ============================================
+    // assignPaymentKey 테스트
+    // ============================================
+
+    @Test
+    void assignPaymentKey_REQUESTED상태_성공() {
+        Payment payment = Payment.create(100L, 1L, "key", 10000L);
+        payment.assignPaymentKey("pk_test_123");
+        assertThat(payment.getPaymentKey()).isEqualTo("pk_test_123");
+    }
+
+    @Test
+    void assignPaymentKey_중복할당_예외발생() {
+        Payment payment = Payment.create(100L, 1L, "key", 10000L);
+        payment.assignPaymentKey("pk_first");
+
+        assertThatThrownBy(() -> payment.assignPaymentKey("pk_second"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DUPLICATE_PAYMENT);
+    }
+
+    @Test
+    void assignPaymentKey_COMPLETED상태_예외발생() {
+        Payment payment = Payment.create(100L, 1L, "key", 10000L);
+        payment.assignPaymentKey("pk");
+        payment.markAsCompleted();
+
+        assertThatThrownBy(() -> payment.assignPaymentKey("pk2"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ORDER_STATUS);
+    }
+
+    // ============================================
+    // validateAmount 테스트
+    // ============================================
+
+    @Test
+    void validateAmount_일치_예외없음() {
+        Payment payment = Payment.create(100L, 1L, "key", 10000L);
+        assertThatCode(() -> payment.validateAmount(10000L)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void validateAmount_불일치_예외발생() {
+        Payment payment = Payment.create(100L, 1L, "key", 10000L);
+        assertThatThrownBy(() -> payment.validateAmount(99999L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PAYMENT_AMOUNT_MISMATCH);
     }
 
     // ============================================

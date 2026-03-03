@@ -10,7 +10,9 @@ import com.minishop.project.minishop.order.domain.OrderStatus;
 import com.minishop.project.minishop.order.dto.OrderItemRequest;
 import com.minishop.project.minishop.order.service.OrderService;
 import com.minishop.project.minishop.payment.domain.Payment;
+import com.minishop.project.minishop.payment.gateway.PaymentGateway;
 import com.minishop.project.minishop.payment.service.PaymentService;
+import com.minishop.project.minishop.payment.service.TestPaymentGateway;
 import com.minishop.project.minishop.product.domain.Product;
 import com.minishop.project.minishop.product.domain.ProductStatus;
 import com.minishop.project.minishop.product.repository.ProductRepository;
@@ -18,13 +20,20 @@ import com.minishop.project.minishop.refund.domain.Refund;
 import com.minishop.project.minishop.refund.domain.RefundStatus;
 import com.minishop.project.minishop.refund.dto.RefundItemRequest;
 import org.junit.jupiter.api.Test;
+import com.minishop.project.minishop.auth.service.TokenBlacklistService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * RefundService 통합 테스트
@@ -32,10 +41,26 @@ import static org.assertj.core.api.Assertions.*;
  * - 관리자 승인 프로세스
  * - 중복 환불 방지
  * - 재고 복구 검증
+ *
+ * 주의: @Transactional 제거
+ * - 비동기 이벤트 테스트를 위해 트랜잭션이 실제로 커밋되어야 함
+ * - @DirtiesContext로 테스트 간 격리 보장
  */
 @SpringBootTest
-@Transactional
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class RefundServiceTest {
+
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        @Primary
+        public PaymentGateway testPaymentGateway() {
+            return new TestPaymentGateway();
+        }
+    }
 
     @Autowired
     private RefundService refundService;
@@ -66,8 +91,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key-123");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key-123");
 
         OrderItem orderItem = order.getOrderItems().get(0);
         List<RefundItemRequest> items = createRefundItemRequests(orderItem.getId(), 2L);
@@ -102,8 +128,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // When & Then
         assertThatThrownBy(() ->
@@ -123,8 +150,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
         List<RefundItemRequest> items = createRefundItemRequests(orderItem.getId(), 2L);
@@ -145,8 +173,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
         List<RefundItemRequest> items = createRefundItemRequests(orderItem.getId(), 2L);
@@ -171,8 +200,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)  // 50000원 주문
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
         // 5개 중 3개만 환불
@@ -196,8 +226,9 @@ class RefundServiceTest {
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product1.getId(), 5L),  // 5000원
                 new OrderItemRequest(product2.getId(), 3L)   // 6000원, 총 11000원
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // product1 3개만 환불 요청
         OrderItem orderItem1 = order.getOrderItems().stream()
@@ -223,8 +254,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
 
@@ -247,8 +279,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 20L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 10L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
 
@@ -275,8 +308,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // 존재하지 않는 OrderItem ID
         List<RefundItemRequest> items = createRefundItemRequests(99999L, 1L);
@@ -299,8 +333,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // 5개 중 2개만 환불 요청
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -314,9 +349,11 @@ class RefundServiceTest {
         // When: 관리자 승인
         refundService.approveRefund(refund.getId(), "승인");
 
-        // Then: 2개만 재고 복구
-        Inventory afterApprove = inventoryService.getByProductId(product.getId());
-        assertThat(afterApprove.getQuantityAvailable()).isEqualTo(availableBefore + 2);
+        // Then: 비동기 이벤트로 2개 재고 복구 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Inventory afterApprove = inventoryService.getByProductId(product.getId());
+            assertThat(afterApprove.getQuantityAvailable()).isEqualTo(availableBefore + 2);
+        });
     }
 
     @Test
@@ -330,8 +367,9 @@ class RefundServiceTest {
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product1.getId(), 10L),  // 10개 주문
                 new OrderItemRequest(product2.getId(), 5L)    // 5개 주문
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // product1 3개, product2 2개 환불 요청
         OrderItem orderItem1 = order.getOrderItems().stream()
@@ -350,14 +388,16 @@ class RefundServiceTest {
         // When: 관리자 승인
         refundService.approveRefund(refund.getId(), "승인");
 
-        // Then: 각각 정확한 수량만 복구
+        // Then: 비동기 이벤트로 각각 정확한 수량만 복구 확인
         // product1: 100 - 10 + 3 = 93
         // product2: 50 - 5 + 2 = 47
-        Inventory inv1 = inventoryService.getByProductId(product1.getId());
-        assertThat(inv1.getQuantityAvailable()).isEqualTo(93L);
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Inventory inv1 = inventoryService.getByProductId(product1.getId());
+            assertThat(inv1.getQuantityAvailable()).isEqualTo(93L);
 
-        Inventory inv2 = inventoryService.getByProductId(product2.getId());
-        assertThat(inv2.getQuantityAvailable()).isEqualTo(47L);
+            Inventory inv2 = inventoryService.getByProductId(product2.getId());
+            assertThat(inv2.getQuantityAvailable()).isEqualTo(47L);
+        });
     }
 
     @Test
@@ -367,8 +407,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
         List<RefundItemRequest> items = createRefundItemRequests(orderItem.getId(), 2L);
@@ -396,8 +437,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 3L)  // 30000원
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // 전액 환불 (3개 모두)
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -407,9 +449,11 @@ class RefundServiceTest {
         // When
         refundService.approveRefund(refund.getId(), "승인");
 
-        // Then: Order 상태 REFUNDED
-        Order refundedOrder = orderService.getOrderById(order.getId());
-        assertThat(refundedOrder.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        // Then: 비동기 이벤트로 Order 상태 REFUNDED 확인
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Order refundedOrder = orderService.getOrderById(order.getId());
+            assertThat(refundedOrder.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        });
     }
 
     @Test
@@ -419,8 +463,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)  // 50000원
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // 부분 환불 (5개 중 2개)
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -446,8 +491,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
         List<RefundItemRequest> items = createRefundItemRequests(orderItem.getId(), 1L);
@@ -468,8 +514,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
         List<RefundItemRequest> items = createRefundItemRequests(orderItem.getId(), 1L);
@@ -489,8 +536,9 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
-        Payment payment = paymentService.processPayment(testUserId, order.getId(), "key");
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
         List<RefundItemRequest> items = createRefundItemRequests(orderItem.getId(), 1L);
@@ -538,5 +586,20 @@ class RefundServiceTest {
         } catch (Exception e) {
             throw new RuntimeException("Failed to create RefundItemRequest", e);
         }
+    }
+
+    /**
+     * 결제 준비 + 승인 + Order PAID 대기 헬퍼 메서드
+     */
+    private Payment completePayment(Long userId, Long orderId, String idempotencyKey) {
+        Payment prepared = paymentService.preparePayment(userId, orderId, idempotencyKey);
+        Payment confirmed = paymentService.confirmPayment(
+                userId, "test-pk-" + idempotencyKey, prepared.getTossOrderId(), prepared.getAmount()
+        );
+        await().atMost(5, SECONDS).untilAsserted(() -> {
+            Order order = orderService.getOrderById(orderId);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        });
+        return confirmed;
     }
 }

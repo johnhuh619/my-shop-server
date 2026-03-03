@@ -16,9 +16,15 @@ import com.minishop.project.minishop.product.repository.ProductRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.minishop.project.minishop.auth.service.TokenBlacklistService;
+import com.minishop.project.minishop.payment.gateway.PaymentGateway;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +43,18 @@ import static org.assertj.core.api.Assertions.*;
  */
 @SpringBootTest
 class PaymentIdempotencyTest {
+
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        @Primary
+        public PaymentGateway testPaymentGateway() {
+            return new TestPaymentGateway();
+        }
+    }
 
     @Autowired
     private PaymentService paymentService;
@@ -80,7 +98,8 @@ class PaymentIdempotencyTest {
         // 테스트용 주문 생성
         testOrder = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(testProduct.getId(), 5L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
     }
 
     @AfterEach
@@ -112,7 +131,7 @@ class PaymentIdempotencyTest {
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    Payment payment = paymentService.processPayment(
+                    Payment payment = paymentService.preparePayment(
                             testUserId, testOrder.getId(), idempotencyKey);
                     synchronized (results) {
                         results.add(payment);
@@ -152,7 +171,8 @@ class PaymentIdempotencyTest {
         inventoryService.addStock(testProduct.getId(), 100L);
         Order order2 = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(testProduct.getId(), 3L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         int threadCount = 10;
         String idempotencyKey = "duplicate-key";
@@ -167,7 +187,7 @@ class PaymentIdempotencyTest {
             executor.submit(() -> {
                 try {
                     Long orderId = (index < 5) ? testOrder.getId() : order2.getId();
-                    paymentService.processPayment(testUserId, orderId, idempotencyKey);
+                    paymentService.preparePayment(testUserId, orderId, idempotencyKey);
                     successCount.incrementAndGet();
                 } catch (BusinessException e) {
                     if (e.getErrorCode() == ErrorCode.DUPLICATE_PAYMENT) {
@@ -205,8 +225,8 @@ class PaymentIdempotencyTest {
         List<Order> orders = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             orders.add(orderService.createOrder(testUserId, List.of(
-                    new OrderItemRequest(testProduct.getId(), 1L)
-            )));
+                    new OrderItemRequest(testProduct.getId(), 1L)),
+                    "홍길동", "010-1234-5678", "서울시 강남구", null, "06000"));
         }
 
         int threadCount = 5;
@@ -219,7 +239,7 @@ class PaymentIdempotencyTest {
             final int index = i;
             executor.submit(() -> {
                 try {
-                    paymentService.processPayment(
+                    paymentService.preparePayment(
                             testUserId,
                             orders.get(index).getId(),
                             "key-" + index
@@ -249,7 +269,8 @@ class PaymentIdempotencyTest {
         inventoryService.addStock(testProduct.getId(), 100L);
         Order otherUserOrder = orderService.createOrder(otherUserId, List.of(
                 new OrderItemRequest(testProduct.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         int threadCount = 10;
         String sameKey = "shared-key";
@@ -264,7 +285,7 @@ class PaymentIdempotencyTest {
                 try {
                     Long userId = (index < 5) ? testUserId : otherUserId;
                     Long orderId = (index < 5) ? testOrder.getId() : otherUserOrder.getId();
-                    paymentService.processPayment(userId, orderId, sameKey);
+                    paymentService.preparePayment(userId, orderId, sameKey);
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     // 다른 userId이므로 같은 키 허용
@@ -314,7 +335,8 @@ class PaymentIdempotencyTest {
         inventoryService.addStock(testProduct.getId(), 100L);
         Order otherOrder = orderService.createOrder(otherUserId, List.of(
                 new OrderItemRequest(testProduct.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment2 = Payment.create(otherUserId, otherOrder.getId(), "shared-key", 20000L);
 
         // Then: 예외 없이 저장 성공 (다른 userId)
@@ -346,7 +368,7 @@ class PaymentIdempotencyTest {
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    paymentService.processPayment(testUserId, testOrder.getId(), idempotencyKey);
+                    paymentService.preparePayment(testUserId, testOrder.getId(), idempotencyKey);
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     exceptionCount.incrementAndGet();
@@ -374,8 +396,8 @@ class PaymentIdempotencyTest {
         List<Order> orders = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             orders.add(orderService.createOrder(testUserId, List.of(
-                    new OrderItemRequest(testProduct.getId(), 1L)
-            )));
+                    new OrderItemRequest(testProduct.getId(), 1L)),
+                    "홍길동", "010-1234-5678", "서울시 강남구", null, "06000"));
         }
 
         int threadCount = 10;
@@ -388,7 +410,7 @@ class PaymentIdempotencyTest {
             final int index = i;
             executor.submit(() -> {
                 try {
-                    paymentService.processPayment(
+                    paymentService.preparePayment(
                             testUserId,
                             orders.get(index).getId(),
                             "key-" + index

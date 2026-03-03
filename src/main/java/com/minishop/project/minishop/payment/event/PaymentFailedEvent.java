@@ -8,8 +8,8 @@ import java.time.Instant;
 /**
  * Payment 실패 이벤트
  *
- * 추후 Outbox 패턴 전환 시 사용할 이벤트 클래스
- * 현재는 동기 호출로 구현되어 있지만, 구조는 이벤트 기반으로 설계
+ * Spring Event 기반 비동기 처리
+ * 결제 실패 시 cancelOrderBySystem을 통해 재고 해제 + 주문 취소
  */
 @Getter
 public class PaymentFailedEvent {
