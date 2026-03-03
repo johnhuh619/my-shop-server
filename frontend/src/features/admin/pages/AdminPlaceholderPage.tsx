@@ -1094,4 +1094,3 @@ export const AdminPlaceholderPage = () => {
     </VStack>
   )
 }
-
