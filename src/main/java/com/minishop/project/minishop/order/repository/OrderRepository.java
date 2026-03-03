@@ -44,4 +44,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      */
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.id = :id")
     Optional<Order> findByIdWithItems(@Param("id") Long id);
+
+    /**
+     * 사용자의 주문 목록 + OrderItems 즉시 로딩 (N+1 방지)
+     */
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.userId = :userId")
+    List<Order> findByUserIdWithItems(@Param("userId") Long userId);
 }

@@ -27,7 +27,9 @@ public class OrderService {
     private final InventoryService inventoryService;
 
     @Transactional
-    public Order createOrder(Long userId, List<OrderItemRequest> itemRequests) {
+    public Order createOrder(Long userId, List<OrderItemRequest> itemRequests,
+                             String recipientName, String recipientPhone,
+                             String address, String addressDetail, String zipCode) {
         validateOrderRequest(itemRequests);
 
         // Normalize lock acquisition order to reduce deadlock risk.
@@ -50,7 +52,8 @@ public class OrderService {
             orderItems.add(orderItem);
         }
 
-        Order order = Order.create(userId, orderItems);
+        Order order = Order.create(userId, orderItems,
+                recipientName, recipientPhone, address, addressDetail, zipCode);
         return orderRepository.save(order);
     }
 
@@ -76,6 +79,11 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<Order> getOrdersByUser(Long userId) {
         return orderRepository.findByUserId(userId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Order> getOrdersByUserWithItems(Long userId) {
+        return orderRepository.findByUserIdWithItems(userId);
     }
 
     @Transactional

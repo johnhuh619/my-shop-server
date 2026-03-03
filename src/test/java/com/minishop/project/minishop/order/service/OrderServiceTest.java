@@ -72,8 +72,8 @@ class OrderServiceTest {
 
         // When
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // Then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED);
@@ -97,8 +97,8 @@ class OrderServiceTest {
         // When
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product1.getId(), 3L),
-                new OrderItemRequest(product2.getId(), 2L)
-        ));
+                new OrderItemRequest(product2.getId(), 2L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // Then
         assertThat(order.getTotalAmount()).isEqualTo(7000L); // 1000*3 + 2000*2
@@ -120,8 +120,8 @@ class OrderServiceTest {
 
         // When & Then
         assertThatThrownBy(() -> orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 10L)
-        )))
+                new OrderItemRequest(product.getId(), 10L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INSUFFICIENT_INVENTORY);
 
@@ -135,8 +135,8 @@ class OrderServiceTest {
     void createOrder_상품없음_예외발생() {
         // When & Then
         assertThatThrownBy(() -> orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(999L, 1L)
-        )))
+                new OrderItemRequest(999L, 1L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PRODUCT_NOT_FOUND);
     }
@@ -144,7 +144,8 @@ class OrderServiceTest {
     @Test
     void createOrder_아이템없음_예외발생() {
         // When & Then
-        assertThatThrownBy(() -> orderService.createOrder(testUserId, List.of()))
+        assertThatThrownBy(() -> orderService.createOrder(testUserId, List.of(),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT_VALUE)
                 .hasMessageContaining("Order must have at least one item");
@@ -157,8 +158,8 @@ class OrderServiceTest {
 
         // When & Then
         assertThatThrownBy(() -> orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 0L)
-        )))
+                new OrderItemRequest(product.getId(), 0L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT_VALUE)
                 .hasMessageContaining("Quantity must be positive");
@@ -174,8 +175,8 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
         Order canceledOrder = orderService.cancelOrder(order.getId(), testUserId);
@@ -199,8 +200,8 @@ class OrderServiceTest {
 
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product1.getId(), 3L),
-                new OrderItemRequest(product2.getId(), 2L)
-        ));
+                new OrderItemRequest(product2.getId(), 2L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
         orderService.cancelOrder(order.getId(), testUserId);
@@ -225,8 +226,8 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When & Then
         assertThatThrownBy(() -> orderService.getOrder(order.getId(), otherUserId))
@@ -240,8 +241,8 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When & Then
         assertThatThrownBy(() -> orderService.cancelOrder(order.getId(), otherUserId))
@@ -259,8 +260,8 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
         Order retrievedOrder = orderService.getOrder(order.getId(), testUserId);
@@ -280,8 +281,8 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When: CREATED → PAID → COMPLETED
         orderService.markAsPaid(order.getId());
@@ -303,8 +304,8 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
         Order first = orderService.markAsPaid(order.getId());
@@ -330,8 +331,8 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
         orderService.expireOrder(order.getId());
@@ -352,8 +353,8 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 5L)
-        ));
+                new OrderItemRequest(product.getId(), 5L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         orderService.markAsPaid(order.getId());
 
         // When
@@ -376,8 +377,8 @@ class OrderServiceTest {
 
         // When: 주문 생성 (가격 10000원으로 스냅샷)
         Order order = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 2L)
-        ));
+                new OrderItemRequest(product.getId(), 2L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When: 상품 가격 변경 (10000 → 20000)
         product.updateInfo("Test Product", "desc", 20000L);
@@ -400,9 +401,12 @@ class OrderServiceTest {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 100L);
 
-        orderService.createOrder(testUserId, List.of(new OrderItemRequest(product.getId(), 1L)));
-        orderService.createOrder(testUserId, List.of(new OrderItemRequest(product.getId(), 2L)));
-        orderService.createOrder(otherUserId, List.of(new OrderItemRequest(product.getId(), 3L)));
+        orderService.createOrder(testUserId, List.of(new OrderItemRequest(product.getId(), 1L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        orderService.createOrder(testUserId, List.of(new OrderItemRequest(product.getId(), 2L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
+        orderService.createOrder(otherUserId, List.of(new OrderItemRequest(product.getId(), 3L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
         List<Order> userOrders = orderService.getOrdersByUser(testUserId);

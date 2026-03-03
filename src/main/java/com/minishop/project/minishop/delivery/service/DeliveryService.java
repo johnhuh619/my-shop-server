@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -45,6 +47,32 @@ public class DeliveryService {
                             request.getAddress(), request.getAddressDetail(),
                             request.getZipCode());
 
+                    return deliveryRepository.save(delivery);
+                });
+    }
+
+    /**
+     * 결제 완료 후 자동 배송 생성.
+     * Order의 배송지 스냅샷을 사용하여 PREPARING 상태의 Delivery를 생성한다.
+     * 멱등: 이미 존재하면 기존 Delivery를 반환한다.
+     */
+    @Transactional
+    public Delivery createDeliveryFromOrder(Long orderId) {
+        return deliveryRepository.findByOrderId(orderId)
+                .orElseGet(() -> {
+                    Order order = orderService.getOrderById(orderId);
+                    if (order.getStatus() != OrderStatus.PAID) {
+                        throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                                "Delivery can only be created for PAID orders");
+                    }
+
+                    Delivery delivery = Delivery.create(
+                            order.getId(), order.getUserId(),
+                            order.getRecipientName(), order.getRecipientPhone(),
+                            order.getAddress(), order.getAddressDetail(),
+                            order.getZipCode());
+
+                    log.info("Auto-created delivery for orderId={}", orderId);
                     return deliveryRepository.save(delivery);
                 });
     }
@@ -119,5 +147,11 @@ public class DeliveryService {
     @Transactional(readOnly = true)
     public List<Delivery> getAllDeliveries() {
         return deliveryRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, DeliveryStatus> getStatusMapByOrderIds(List<Long> orderIds) {
+        return deliveryRepository.findByOrderIdIn(orderIds).stream()
+                .collect(Collectors.toMap(Delivery::getOrderId, Delivery::getStatus));
     }
 }

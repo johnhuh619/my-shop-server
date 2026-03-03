@@ -90,7 +90,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
         Payment payment = paymentService.preparePayment(testUserId, order.getId(), "key-123");
@@ -111,7 +112,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
         Payment payment = paymentService.preparePayment(testUserId, order.getId(), "key");
@@ -134,7 +136,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         orderService.cancelOrder(order.getId(), testUserId);
 
         assertThatThrownBy(() ->
@@ -149,7 +152,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         orderService.expireOrder(order.getId());
 
         assertThatThrownBy(() ->
@@ -169,7 +173,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment prepared = paymentService.preparePayment(testUserId, order.getId(), "key-123");
 
         // When
@@ -189,7 +194,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment prepared = paymentService.preparePayment(testUserId, order.getId(), "key-123");
 
         // When
@@ -216,7 +222,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment prepared = paymentService.preparePayment(testUserId, order.getId(), "key");
 
         // When & Then: 위변조된 금액
@@ -233,7 +240,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment prepared = paymentService.preparePayment(testUserId, order.getId(), "key");
 
         // When & Then
@@ -250,7 +258,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment prepared = paymentService.preparePayment(testUserId, order.getId(), "key");
 
         // 첫 번째 confirm
@@ -284,7 +293,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment prepared = paymentService.preparePayment(testUserId, order.getId(), "key");
         testGateway.setShouldFail(true);
 
@@ -318,7 +328,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         Payment first = paymentService.preparePayment(testUserId, order.getId(), "idempotent-key");
         Payment second = paymentService.preparePayment(testUserId, order.getId(), "idempotent-key");
@@ -338,10 +349,12 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 20L);
         Order order1 = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Order order2 = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         paymentService.preparePayment(testUserId, order1.getId(), "same-key");
 
@@ -357,10 +370,12 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 20L);
         Order order1 = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Order order2 = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         Payment payment1 = paymentService.preparePayment(testUserId, order1.getId(), "key-1");
         Payment payment2 = paymentService.preparePayment(testUserId, order2.getId(), "key-2");
@@ -383,7 +398,8 @@ class PaymentServiceTest {
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product1.getId(), 3L),
                 new OrderItemRequest(product2.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Long expectedAmount = 1000L * 3L + 2000L * 2L; // 7000
 
         Payment prepared = paymentService.preparePayment(testUserId, order.getId(), "key");
@@ -417,7 +433,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         Payment payment = paymentService.preparePayment(testUserId, order.getId(), "key");
         Payment retrieved = paymentService.getPayment(payment.getId(), testUserId);
@@ -432,7 +449,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         Payment payment = paymentService.preparePayment(testUserId, order.getId(), "key");
 
@@ -448,7 +466,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         assertThatThrownBy(() ->
                 paymentService.preparePayment(otherUserId, order.getId(), "key"))
@@ -466,7 +485,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         Payment payment = paymentService.preparePayment(testUserId, order.getId(), "key");
 
@@ -484,7 +504,8 @@ class PaymentServiceTest {
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product1.getId(), 3L),
                 new OrderItemRequest(product2.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         Payment payment = paymentService.preparePayment(testUserId, order.getId(), "key");
 
@@ -503,11 +524,14 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 100L);
 
         Order order1 = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 1L)));
+                new OrderItemRequest(product.getId(), 1L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Order order2 = orderService.createOrder(testUserId, List.of(
-                new OrderItemRequest(product.getId(), 2L)));
+                new OrderItemRequest(product.getId(), 2L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Order order3 = orderService.createOrder(otherUserId, List.of(
-                new OrderItemRequest(product.getId(), 3L)));
+                new OrderItemRequest(product.getId(), 3L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         paymentService.preparePayment(testUserId, order1.getId(), "key-1");
         paymentService.preparePayment(testUserId, order2.getId(), "key-2");
@@ -536,7 +560,8 @@ class PaymentServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // Step 1: prepare
         Payment prepared = paymentService.preparePayment(testUserId, order.getId(), "e2e-key");

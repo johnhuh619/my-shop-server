@@ -98,7 +98,8 @@ class PaymentIdempotencyTest {
         // 테스트용 주문 생성
         testOrder = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(testProduct.getId(), 5L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
     }
 
     @AfterEach
@@ -170,7 +171,8 @@ class PaymentIdempotencyTest {
         inventoryService.addStock(testProduct.getId(), 100L);
         Order order2 = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(testProduct.getId(), 3L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         int threadCount = 10;
         String idempotencyKey = "duplicate-key";
@@ -223,8 +225,8 @@ class PaymentIdempotencyTest {
         List<Order> orders = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             orders.add(orderService.createOrder(testUserId, List.of(
-                    new OrderItemRequest(testProduct.getId(), 1L)
-            )));
+                    new OrderItemRequest(testProduct.getId(), 1L)),
+                    "홍길동", "010-1234-5678", "서울시 강남구", null, "06000"));
         }
 
         int threadCount = 5;
@@ -267,7 +269,8 @@ class PaymentIdempotencyTest {
         inventoryService.addStock(testProduct.getId(), 100L);
         Order otherUserOrder = orderService.createOrder(otherUserId, List.of(
                 new OrderItemRequest(testProduct.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         int threadCount = 10;
         String sameKey = "shared-key";
@@ -332,7 +335,8 @@ class PaymentIdempotencyTest {
         inventoryService.addStock(testProduct.getId(), 100L);
         Order otherOrder = orderService.createOrder(otherUserId, List.of(
                 new OrderItemRequest(testProduct.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment2 = Payment.create(otherUserId, otherOrder.getId(), "shared-key", 20000L);
 
         // Then: 예외 없이 저장 성공 (다른 userId)
@@ -392,8 +396,8 @@ class PaymentIdempotencyTest {
         List<Order> orders = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             orders.add(orderService.createOrder(testUserId, List.of(
-                    new OrderItemRequest(testProduct.getId(), 1L)
-            )));
+                    new OrderItemRequest(testProduct.getId(), 1L)),
+                    "홍길동", "010-1234-5678", "서울시 강남구", null, "06000"));
         }
 
         int threadCount = 10;

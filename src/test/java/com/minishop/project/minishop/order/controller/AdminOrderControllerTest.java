@@ -137,7 +137,8 @@ class AdminOrderControllerTest {
     private Order createCreatedOrder(Long userId) {
         Product product = createProduct("Test Product", 10000L);
         inventoryService.addStock(product.getId(), 10L);
-        return orderService.createOrder(userId, List.of(new OrderItemRequest(product.getId(), 2L)));
+        return orderService.createOrder(userId, List.of(new OrderItemRequest(product.getId(), 2L)),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
     }
 
     private Order createPaidOrder(Long userId) {

@@ -1,5 +1,6 @@
 package com.minishop.project.minishop.payment.event;
 
+import com.minishop.project.minishop.delivery.service.DeliveryService;
 import com.minishop.project.minishop.order.service.OrderService;
 import com.minishop.project.minishop.outbox.service.RetryTaskService;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +15,7 @@ import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMI
  * Payment 이벤트 리스너
  *
  * confirm 이후 후속 처리를 비동기로 수행
- * - PaymentCompletedEvent: Order 상태 변경 (CREATED → PAID)
+ * - PaymentCompletedEvent: Order 상태 변경 (CREATED → PAID) + 배송 자동 생성
  * - PaymentFailedEvent: 재고 해제 + 주문 취소
  *
  * 실패 시 RetryTaskService에 등록하여 스케줄러가 재시도한다.
@@ -25,11 +26,13 @@ import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMI
 public class PaymentEventListener {
 
     private final OrderService orderService;
+    private final DeliveryService deliveryService;
     private final RetryTaskService retryTaskService;
 
     /**
      * 결제 완료 이벤트 처리
-     * - Order 상태를 CREATED → PAID로 변경
+     * 1. Order 상태를 CREATED → PAID로 변경
+     * 2. PREPARING 상태의 Delivery 자동 생성
      */
     @TransactionalEventListener(phase = AFTER_COMMIT)
     @Async
@@ -41,9 +44,20 @@ public class PaymentEventListener {
             orderService.markAsPaid(event.getOrderId());
             log.info("Order status updated to PAID: orderId={}", event.getOrderId());
         } catch (Exception e) {
-            log.error("Failed to handle PaymentCompletedEvent: orderId={}, error={}",
+            log.error("Failed to mark order as paid: orderId={}, error={}",
                     event.getOrderId(), e.getMessage(), e);
             retryTaskService.register("MARK_AS_PAID",
+                    "{\"orderId\":" + event.getOrderId() + "}");
+            return;
+        }
+
+        try {
+            deliveryService.createDeliveryFromOrder(event.getOrderId());
+            log.info("Delivery auto-created: orderId={}", event.getOrderId());
+        } catch (Exception e) {
+            log.error("Failed to auto-create delivery: orderId={}, error={}",
+                    event.getOrderId(), e.getMessage(), e);
+            retryTaskService.register("CREATE_DELIVERY",
                     "{\"orderId\":" + event.getOrderId() + "}");
         }
     }

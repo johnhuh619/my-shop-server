@@ -134,6 +134,8 @@ public class Payment {
         this.updatedAt = Instant.now();
     }
 
+
+
     private static String generateTossOrderId(Long orderId) {
         String uuid8 = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         return "MINISHOP_" + orderId + "_" + uuid8;

@@ -91,7 +91,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key-123");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -127,7 +128,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // When & Then
@@ -148,7 +150,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -170,7 +173,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -196,7 +200,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)  // 50000원 주문
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -221,7 +226,8 @@ class RefundServiceTest {
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product1.getId(), 5L),  // 5000원
                 new OrderItemRequest(product2.getId(), 3L)   // 6000원, 총 11000원
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // product1 3개만 환불 요청
@@ -248,7 +254,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -272,7 +279,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 20L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 10L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -300,7 +308,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 2L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // 존재하지 않는 OrderItem ID
@@ -324,7 +333,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // 5개 중 2개만 환불 요청
@@ -357,7 +367,8 @@ class RefundServiceTest {
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product1.getId(), 10L),  // 10개 주문
                 new OrderItemRequest(product2.getId(), 5L)    // 5개 주문
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // product1 3개, product2 2개 환불 요청
@@ -396,7 +407,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -425,7 +437,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 3L)  // 30000원
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // 전액 환불 (3개 모두)
@@ -450,7 +463,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 5L)  // 50000원
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         // 부분 환불 (5개 중 2개)
@@ -477,7 +491,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -499,7 +514,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);
@@ -520,7 +536,8 @@ class RefundServiceTest {
         inventoryService.addStock(product.getId(), 10L);
         Order order = orderService.createOrder(testUserId, List.of(
                 new OrderItemRequest(product.getId(), 1L)
-        ));
+        ),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
         Payment payment = completePayment(testUserId, order.getId(), "key");
 
         OrderItem orderItem = order.getOrderItems().get(0);

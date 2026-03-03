@@ -22,7 +22,8 @@ class OrderTest {
         OrderItem item2 = OrderItem.create(2L, "Product B", 2000L, 3L);
 
         // When
-        Order order = Order.create(100L, List.of(item1, item2));
+        Order order = Order.create(100L, List.of(item1, item2),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // Then
         assertThat(order.getUserId()).isEqualTo(100L);
@@ -34,7 +35,8 @@ class OrderTest {
     @Test
     void create_아이템없이생성시_총액0() {
         // When
-        Order order = Order.create(100L, List.of());
+        Order order = Order.create(100L, List.of(),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // Then
         assertThat(order.getTotalAmount()).isEqualTo(0L);
@@ -261,7 +263,8 @@ class OrderTest {
         OrderItem item3 = OrderItem.create(3L, "Product C", 3000L, 1L);
 
         // When
-        Order order = Order.create(100L, List.of(item1, item2, item3));
+        Order order = Order.create(100L, List.of(item1, item2, item3),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // Then
         // 1500*3 + 2500*2 + 3000*1 = 4500 + 5000 + 3000 = 12500
@@ -274,7 +277,8 @@ class OrderTest {
         OrderItem item = OrderItem.create(1L, "Product A", 1000L, 5L);
 
         // When
-        Order order = Order.create(100L, List.of(item));
+        Order order = Order.create(100L, List.of(item),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // Then
         assertThat(order.getTotalAmount()).isEqualTo(5000L);
@@ -347,6 +351,7 @@ class OrderTest {
 
     private Order createOrderWithItems() {
         OrderItem item = OrderItem.create(1L, "Test Product", 1000L, 2L);
-        return Order.create(100L, List.of(item));
+        return Order.create(100L, List.of(item),
+                "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
     }
 }
