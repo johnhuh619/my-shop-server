@@ -5,9 +5,11 @@ import { formatCurrency } from '@/shared/utils/format'
 
 interface OrderItemSummaryCardProps {
   item: OrderItemResponse
+  orderId?: number
+  showRefundDetailAction?: boolean
 }
 
-export const OrderItemSummaryCard = ({ item }: OrderItemSummaryCardProps) => {
+export const OrderItemSummaryCard = ({ item, orderId, showRefundDetailAction = false }: OrderItemSummaryCardProps) => {
   return (
     <article className="w-full border-t border-stroke-neutral-muted pt-3 first:border-t-0 first:pt-0">
       <div className="flex w-full items-center gap-3">
@@ -33,9 +35,16 @@ export const OrderItemSummaryCard = ({ item }: OrderItemSummaryCardProps) => {
             <Text textStyle="t5Bold">{formatCurrency(item.subtotal)}</Text>
           </VStack>
 
-          <ActionButton asChild variant="neutralWeak" size="small" className="shrink-0">
-            <Link to={`/products/${item.productId}`}>재구매</Link>
-          </ActionButton>
+          <VStack gap="x1" align="flex-end" className="shrink-0">
+            <ActionButton asChild variant="neutralWeak" size="small">
+              <Link to={`/products/${item.productId}`}>재구매</Link>
+            </ActionButton>
+            {showRefundDetailAction && item.refunded && orderId ? (
+              <ActionButton asChild variant="neutralWeak" size="small">
+                <Link to={`/me/refunds?orderId=${orderId}`}>환불 내역</Link>
+              </ActionButton>
+            ) : null}
+          </VStack>
         </div>
       </div>
     </article>
