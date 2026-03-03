@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface RefundRepository extends JpaRepository<Refund, Long> {
 
@@ -48,4 +49,19 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
            "WHERE r.paymentId = :paymentId AND r.status = :status")
     Long sumAmountByPaymentIdAndStatus(@Param("paymentId") Long paymentId,
                                        @Param("status") RefundStatus status);
+
+    /**
+     * 주문 기준 환불 완료된 OrderItem ID 조회
+     */
+    @Query("SELECT ri.orderItemId FROM Refund r JOIN r.refundItems ri " +
+           "WHERE r.orderId = :orderId AND r.status = com.minishop.project.minishop.refund.domain.RefundStatus.COMPLETED")
+    Set<Long> findCompletedRefundItemIdsByOrderId(@Param("orderId") Long orderId);
+
+    /**
+     * 주문 ID 목록 기준 환불 완료된 OrderItem ID 배치 조회 (N+1 방지)
+     * 각 row는 [orderId, orderItemId] 형태로 반환
+     */
+    @Query("SELECT r.orderId, ri.orderItemId FROM Refund r JOIN r.refundItems ri " +
+           "WHERE r.orderId IN :orderIds AND r.status = com.minishop.project.minishop.refund.domain.RefundStatus.COMPLETED")
+    List<Object[]> findCompletedRefundItemIdsByOrderIds(@Param("orderIds") List<Long> orderIds);
 }

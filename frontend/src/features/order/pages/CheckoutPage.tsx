@@ -1,6 +1,6 @@
 ﻿import { ActionButton, HStack, Text, VStack } from '@seed-design/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { orderApi } from '@/features/order/api/orderApi'
 import { paymentApi } from '@/features/payment/api/paymentApi'
@@ -79,12 +79,17 @@ const buildFailureMessage = (code: string, message: string) => {
   return message
 }
 
+const POST_CONFIRM_POLL_INTERVAL_MS = 1500
+const POST_CONFIRM_POLL_TIMEOUT_MS = 30000
+
 export const CheckoutPage = () => {
   const { orderId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const auth = useAuth()
   const parsedOrderId = Number(orderId)
   const queryClient = useQueryClient()
+  const [shouldPollOrder, setShouldPollOrder] = useState(false)
+  const [pollTimedOut, setPollTimedOut] = useState(false)
 
   const redirectedPaymentKey = searchParams.get('paymentKey')?.trim() ?? ''
   const redirectedOrderId = searchParams.get('orderId')?.trim() ?? ''
@@ -121,6 +126,13 @@ export const CheckoutPage = () => {
     queryKey: ['order', parsedOrderId],
     queryFn: () => orderApi.getOrder(parsedOrderId),
     enabled: Number.isFinite(parsedOrderId),
+    refetchInterval: (query) => {
+      const status = (query.state.data as { status?: OrderStatus } | undefined)?.status
+      if (!shouldPollOrder || status !== 'CREATED') {
+        return false
+      }
+      return POST_CONFIRM_POLL_INTERVAL_MS
+    },
   })
 
   const prepareAndOpenMutation = useMutation({
@@ -159,6 +171,8 @@ export const CheckoutPage = () => {
     onSuccess: async () => {
       sessionStorage.removeItem(`idempotency-key-${parsedOrderId}`)
       setSearchParams(stripPaymentRedirectParams(searchParams))
+      setPollTimedOut(false)
+      setShouldPollOrder(true)
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['order', parsedOrderId] }),
@@ -174,10 +188,25 @@ export const CheckoutPage = () => {
     autoConfirmAttemptRef.current = ''
   }, [redirectedAmountRaw, redirectedOrderId, redirectedPaymentKey])
 
+  useEffect(() => {
+    if (!shouldPollOrder || orderQuery.data?.status !== 'CREATED') {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShouldPollOrder(false)
+      setPollTimedOut(true)
+    }, POST_CONFIRM_POLL_TIMEOUT_MS)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [orderQuery.data?.status, shouldPollOrder])
+
   const order = orderQuery.data
   const isOrderCreatable = order?.status === 'CREATED'
   const isOrderAlreadyPaid = order?.status === 'PAID' || order?.status === 'COMPLETED'
   const isOrderNonPayable = !!order && !isOrderCreatable && !isOrderAlreadyPaid
+  const isPostConfirmSyncing = !!order && shouldPollOrder && order.status === 'CREATED'
+  const isPostConfirmSynced = !!order && !!confirmMutation.data && (order.status === 'PAID' || order.status === 'COMPLETED')
 
   useEffect(() => {
     if (!isOrderCreatable || !redirectConfirmPayload) {
@@ -224,6 +253,17 @@ export const CheckoutPage = () => {
         </VStack>
       </section>
 
+      <section className="rounded-r3 border border-stroke-informative-weak bg-bg-informative-weak px-5 py-4">
+        <VStack gap="x2" align="flex-start">
+          <Text textStyle="t5Bold" color="fg.informative">
+            결제 후 주문/배송 반영은 비동기 처리됩니다.
+          </Text>
+          <Text textStyle="t4Regular" color="fg.informative">
+            결제 승인 직후에도 주문 상태가 잠시 CREATED로 보일 수 있습니다. 이 화면은 자동 새로고침으로 후속 반영을 확인합니다.
+          </Text>
+        </VStack>
+      </section>
+
       {isOrderNonPayable ? (
         <section className="rounded-r3 border border-stroke-critical-weak bg-bg-critical-weak px-5 py-5">
           <VStack gap="x2" align="flex-start">
@@ -263,6 +303,38 @@ export const CheckoutPage = () => {
         </section>
       ) : null}
 
+      {isPostConfirmSyncing ? (
+        <section className="rounded-r3 border border-stroke-warning-weak bg-bg-warning-weak px-5 py-5">
+          <VStack gap="x2" align="flex-start">
+            <Text textStyle="t5Bold" color="fg.warning">
+              결제는 승인되었고, 주문/배송 반영을 확인하는 중입니다.
+            </Text>
+            <Text textStyle="t4Regular" color="fg.warning">
+              백엔드 비동기 후속 처리(markAsPaid, delivery 생성)가 진행 중일 수 있습니다.
+            </Text>
+            <ActionButton variant="neutralWeak" loading={orderQuery.isFetching} onClick={() => void orderQuery.refetch()}>
+              상태 새로고침
+            </ActionButton>
+          </VStack>
+        </section>
+      ) : null}
+
+      {pollTimedOut && !isPostConfirmSynced ? (
+        <section className="rounded-r3 border border-stroke-critical-weak bg-bg-critical-weak px-5 py-5">
+          <VStack gap="x2" align="flex-start">
+            <Text textStyle="t5Bold" color="fg.critical">
+              후속 반영이 지연되고 있습니다.
+            </Text>
+            <Text textStyle="t4Regular" color="fg.critical">
+              잠시 후 다시 새로고침하거나 주문 상세 화면에서 상태를 확인해주세요.
+            </Text>
+            <ActionButton variant="neutralWeak" loading={orderQuery.isFetching} onClick={() => void orderQuery.refetch()}>
+              지금 새로고침
+            </ActionButton>
+          </VStack>
+        </section>
+      ) : null}
+
       {isOrderCreatable ? (
         <>
           <section className="rounded-r3 border border-stroke-neutral-subtle bg-bg-layer-floating p-5">
@@ -291,7 +363,11 @@ export const CheckoutPage = () => {
               <ActionButton
                 loading={prepareAndOpenMutation.isPending}
                 disabled={prepareAndOpenMutation.isPending || confirmMutation.isPending || !!redirectConfirmPayload}
-                onClick={() => prepareAndOpenMutation.mutate()}
+                onClick={() => {
+                  setPollTimedOut(false)
+                  setShouldPollOrder(false)
+                  prepareAndOpenMutation.mutate()
+                }}
               >
                 결제하기
               </ActionButton>
@@ -361,6 +437,15 @@ export const CheckoutPage = () => {
             </Text>
             <Text textStyle="t4Regular">paymentId: {confirmMutation.data.id}</Text>
             <StatusChip status={confirmMutation.data.status} />
+            {isPostConfirmSynced ? (
+              <Text textStyle="t4Regular" color="fg.positive">
+                주문 상태 반영이 확인되었습니다.
+              </Text>
+            ) : (
+              <Text textStyle="t4Regular" color="fg.neutralSubtle">
+                주문/배송 반영은 비동기 처리입니다. 상태가 늦게 반영될 수 있습니다.
+              </Text>
+            )}
             <HStack gap="x2">
               <Link to={`/me/orders/${order.id}`}>
                 <ActionButton variant="neutralWeak">주문 상세</ActionButton>

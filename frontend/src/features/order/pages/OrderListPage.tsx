@@ -1,6 +1,6 @@
 ﻿import { ActionButton, HStack, Text, VStack } from '@seed-design/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { orderApi } from '@/features/order/api/orderApi'
 import { OrderItemSummaryCard } from '@/features/order/components/OrderItemSummaryCard'
 import { ErrorView } from '@/shared/ui/ErrorView'
@@ -17,6 +17,7 @@ const getStatusSummary = (statuses: string[]) =>
 
 export const OrderListPage = () => {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const ordersQuery = useQuery({
     queryKey: ['orders'],
@@ -40,10 +41,12 @@ export const OrderListPage = () => {
 
   const orders = ordersQuery.data ?? []
   const summary = getStatusSummary(orders.map((order) => order.status))
+  const isInteractiveTarget = (target: EventTarget | null) =>
+    target instanceof Element && !!target.closest('a,button,input,textarea,select,label')
 
   return (
     <VStack gap="x5">
-      <section className="rounded-r3 border border-stroke-neutral-subtle bg-bg-layer-floating px-5 py-6">
+      <section className="rounded-r3 border border-stroke-neutral-muted bg-bg-layer-floating px-5 py-6">
         <VStack gap="x2" align="flex-start">
           <Text textStyle="t7Bold">내 주문</Text>
           <Text textStyle="t4Regular" color="fg.neutralSubtle">
@@ -75,10 +78,30 @@ export const OrderListPage = () => {
       ) : (
         <VStack gap="x3">
           {orders.map((order) => {
-            const showRefundDetailAction = order.status === 'REFUND_REQUESTED' || order.status === 'REFUNDED'
-
             return (
-              <article key={order.id} className="rounded-r3 border border-stroke-neutral-subtle bg-bg-layer-floating p-5">
+              <article
+                key={order.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`주문 ${order.id} 상세로 이동`}
+                className="cursor-pointer rounded-r3 border border-stroke-neutral-muted bg-bg-layer-floating p-5 transition-colors hover:bg-bg-layer-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stroke-brand-solid"
+                onClick={(event) => {
+                  if (isInteractiveTarget(event.target)) {
+                    return
+                  }
+                  navigate(`/me/orders/${order.id}`)
+                }}
+                onKeyDown={(event) => {
+                  if (isInteractiveTarget(event.target)) {
+                    return
+                  }
+                  if (event.key !== 'Enter' && event.key !== ' ') {
+                    return
+                  }
+                  event.preventDefault()
+                  navigate(`/me/orders/${order.id}`)
+                }}
+              >
                 <VStack gap="x3" align="flex-start">
                   <HStack justify="space-between" align="flex-start" className="w-full gap-2">
                     <VStack gap="x1" align="flex-start" className="min-w-0 flex-1">
@@ -99,19 +122,11 @@ export const OrderListPage = () => {
 
                   <VStack gap="x2" align="flex-start" className="w-full rounded-r2 bg-bg-layer-default px-3 py-3">
                     {order.items.map((item) => (
-                      <OrderItemSummaryCard
-                        key={item.id}
-                        item={item}
-                        orderId={order.id}
-                        showRefundDetailAction={showRefundDetailAction}
-                      />
+                      <OrderItemSummaryCard key={item.id} item={item} />
                     ))}
                   </VStack>
 
-                  <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
-                    <ActionButton asChild variant="neutralWeak" className="w-full">
-                      <Link to={`/me/orders/${order.id}`}>주문 상세</Link>
-                    </ActionButton>
+                  <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3">
                     <ActionButton asChild variant="neutralWeak" className="w-full">
                       <Link to={`/me/deliveries?orderId=${order.id}`}>배송 조회</Link>
                     </ActionButton>
@@ -154,3 +169,4 @@ export const OrderListPage = () => {
     </VStack>
   )
 }
+

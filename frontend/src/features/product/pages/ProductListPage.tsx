@@ -1,14 +1,14 @@
 ﻿import { ActionButton, HStack, Text, VStack } from '@seed-design/react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { orderApi } from '@/features/order/api/orderApi'
+import { useCart } from '@/features/cart/hooks/useCart'
 import { productApi } from '@/features/product/api/productApi'
 import { useAuth } from '@/shared/auth/useAuth'
 import { ErrorView } from '@/shared/ui/ErrorView'
 import { LoadingView } from '@/shared/ui/LoadingView'
-import { formatCurrency } from '@/shared/utils/format'
 import { getErrorMessage } from '@/shared/utils/errors'
+import { formatCurrency } from '@/shared/utils/format'
 
 const PAGE_SIZE = 12
 
@@ -42,6 +42,7 @@ const getStockMeta = (quantity: number | null) => {
 
 export const ProductListPage = () => {
   const auth = useAuth()
+  const cart = useCart()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const page = Number(searchParams.get('page') || '0')
@@ -51,16 +52,6 @@ export const ProductListPage = () => {
   const productsQuery = useQuery({
     queryKey: ['products', page, keyword],
     queryFn: () => productApi.getProducts({ page, size: PAGE_SIZE, keyword: keyword || undefined }),
-  })
-
-  const createOrderMutation = useMutation({
-    mutationFn: (productId: number) =>
-      orderApi.createOrder({
-        items: [{ productId, quantity: 1 }],
-      }),
-    onSuccess: (order) => {
-      navigate(`/checkout/${order.id}`)
-    },
   })
 
   const applySearch = () => {
@@ -93,7 +84,7 @@ export const ProductListPage = () => {
         <VStack gap="x2" align="flex-start">
           <Text textStyle="t7Bold">큐레이션 상품</Text>
           <Text textStyle="t4Regular" color="fg.neutralSubtle">
-            빠르게 비교하고 바로 주문할 수 있게 가격과 재고를 우선 배치했습니다.
+            빠르게 비교하고 장바구니에 담아 결제할 수 있게 가격과 재고를 우선 배치했습니다.
           </Text>
           <HStack gap="x2" align="center">
             <span className="rounded-r2 bg-bg-neutral-weak px-3 py-1 text-xs font-semibold text-fg-neutral-subtle">
@@ -166,14 +157,22 @@ export const ProductListPage = () => {
                     <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
                       <ActionButton
                         size="small"
-                        loading={createOrderMutation.isPending}
-                        disabled={createOrderMutation.isPending || isOutOfStock}
+                        disabled={isOutOfStock}
                         onClick={(event) => {
                           event.stopPropagation()
-                          createOrderMutation.mutate(product.id)
+                          cart.addItem({
+                            productId: product.id,
+                            name: product.name,
+                            description: product.description,
+                            unitPrice: product.unitPrice,
+                            status: product.status,
+                            quantityAvailable: product.quantityAvailable,
+                            quantity: 1,
+                          })
+                          navigate('/cart')
                         }}
                       >
-                        바로 주문
+                        장바구니 담기
                       </ActionButton>
                     </div>
                   ) : (
@@ -240,12 +239,6 @@ export const ProductListPage = () => {
           </HStack>
         </HStack>
       </section>
-
-      {createOrderMutation.isError ? (
-        <Text textStyle="t3Regular" color="fg.critical">
-          {getErrorMessage(createOrderMutation.error)}
-        </Text>
-      ) : null}
     </VStack>
   )
 }

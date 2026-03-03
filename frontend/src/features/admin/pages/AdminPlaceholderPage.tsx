@@ -6,13 +6,31 @@ import type { DeliveryResponse, DeliveryStatus, RefundStatus } from '@/shared/ty
 import { ErrorView } from '@/shared/ui/ErrorView'
 import { LoadingView } from '@/shared/ui/LoadingView'
 import { StatusChip } from '@/shared/ui/StatusChip'
-import { formatCurrency } from '@/shared/utils/format'
 import { formatDateTime } from '@/shared/utils/date'
 import { getErrorMessage } from '@/shared/utils/errors'
+import { formatCurrency } from '@/shared/utils/format'
 
 type AdminPanel = 'refunds' | 'deliveries' | 'operations'
 type RefundFilter = 'ALL' | RefundStatus
 type DeliveryFilter = 'ACTION_REQUIRED' | 'ALL' | DeliveryStatus
+
+const panelTabs: { key: AdminPanel; title: string; description: string }[] = [
+  {
+    key: 'refunds',
+    title: '환불 관리',
+    description: '요청건 검수, 코멘트 기록, 승인/거절 처리',
+  },
+  {
+    key: 'deliveries',
+    title: '배송 관리',
+    description: '출고부터 배송 완료까지 상태 전환 관리',
+  },
+  {
+    key: 'operations',
+    title: '운영 도구',
+    description: '주문 완료, 재고 보정, 상품 등록 작업',
+  },
+]
 
 const refundFilters: { key: RefundFilter; label: string }[] = [
   { key: 'ALL', label: '전체' },
@@ -32,6 +50,14 @@ const deliveryFilters: { key: DeliveryFilter; label: string }[] = [
   { key: 'DELIVERED', label: '완료' },
   { key: 'CANCELED', label: '취소' },
 ]
+
+const refundStatusPriority: Record<RefundStatus, number> = {
+  REQUESTED: 0,
+  APPROVED: 1,
+  FAILED: 2,
+  REJECTED: 3,
+  COMPLETED: 4,
+}
 
 const actionRequiredDeliveryStatuses: DeliveryStatus[] = ['PREPARING', 'SHIPPED', 'IN_TRANSIT']
 const deliveryStatusPriority: Record<DeliveryStatus, number> = {
@@ -76,6 +102,41 @@ const getDeliveryStaleMessage = (delivery: DeliveryResponse, referenceTime: numb
   return null
 }
 
+const getChipButtonClass = (selected: boolean) =>
+  selected
+    ? 'inline-flex h-8 items-center justify-center rounded-r2 border border-stroke-brand-solid bg-bg-brand-weak px-3 text-xs font-semibold text-fg-brand'
+    : 'inline-flex h-8 items-center justify-center rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-3 text-xs font-medium text-fg-neutral-subtle'
+
+const getPanelTabClass = (selected: boolean) =>
+  selected
+    ? 'flex min-h-[108px] w-full items-start rounded-r2 border border-stroke-brand-solid bg-bg-brand-weak p-4 text-left'
+    : 'flex min-h-[108px] w-full items-start rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4 text-left'
+
+const renderSummaryCard = ({
+  label,
+  value,
+  highlighted = false,
+}: {
+  label: string
+  value: string
+  highlighted?: boolean
+}) => (
+  <VStack
+    gap="x1"
+    align="flex-start"
+    className={`min-h-[88px] rounded-r2 border px-3 py-3 ${
+      highlighted ? 'border-stroke-warning-weak bg-bg-warning-weak' : 'border-stroke-neutral-muted bg-bg-layer-floating'
+    }`}
+  >
+    <Text textStyle="t3Regular" color={highlighted ? 'fg.warning' : 'fg.neutralSubtle'} className="leading-tight">
+      {label}
+    </Text>
+    <Text textStyle="t5Bold" className="leading-tight">
+      {value}
+    </Text>
+  </VStack>
+)
+
 export const AdminPlaceholderPage = () => {
   const queryClient = useQueryClient()
   const [activePanel, setActivePanel] = useState<AdminPanel>('refunds')
@@ -100,15 +161,17 @@ export const AdminPlaceholderPage = () => {
   const [productUnitPriceInput, setProductUnitPriceInput] = useState('')
 
   const inventoryProductId = Number(inventoryProductIdInput)
+  const canLookupInventory = Number.isFinite(inventoryProductId) && inventoryProductId > 0
+
   const inventoryQuery = useQuery({
     queryKey: ['admin', 'inventory', inventoryProductId],
     queryFn: () => adminApi.getInventory(inventoryProductId),
-    enabled: Number.isFinite(inventoryProductId) && inventoryProductId > 0,
+    enabled: canLookupInventory,
   })
 
   const adminRefundsQuery = useQuery({
-    queryKey: ['admin', 'refunds', refundFilter],
-    queryFn: () => adminApi.getRefunds(refundFilter === 'ALL' ? undefined : refundFilter),
+    queryKey: ['admin', 'refunds'],
+    queryFn: () => adminApi.getRefunds(),
     enabled: activePanel === 'refunds',
   })
 
@@ -147,7 +210,13 @@ export const AdminPlaceholderPage = () => {
   const createDeliveryMutation = useMutation({
     mutationFn: () => {
       const orderId = Number(createDeliveryOrderId)
-      if (!Number.isFinite(orderId) || !createDeliveryRecipientName || !createDeliveryRecipientPhone || !createDeliveryAddress || !createDeliveryZipCode) {
+      if (
+        !Number.isFinite(orderId) ||
+        !createDeliveryRecipientName ||
+        !createDeliveryRecipientPhone ||
+        !createDeliveryAddress ||
+        !createDeliveryZipCode
+      ) {
         throw new Error('배송 생성 입력값을 확인해주세요.')
       }
 
@@ -313,82 +382,179 @@ export const AdminPlaceholderPage = () => {
     }
 
     const refunds = adminRefundsQuery.data ?? []
+    const refundCounts = refunds.reduce<Record<RefundStatus, number>>(
+      (acc, refund) => {
+        acc[refund.status] += 1
+        return acc
+      },
+      {
+        REQUESTED: 0,
+        APPROVED: 0,
+        REJECTED: 0,
+        COMPLETED: 0,
+        FAILED: 0,
+      },
+    )
+
+    const filteredRefunds = refunds
+      .filter((refund) => (refundFilter === 'ALL' ? true : refund.status === refundFilter))
+      .sort((a, b) => {
+        const priorityDiff = refundStatusPriority[a.status] - refundStatusPriority[b.status]
+        if (priorityDiff !== 0) {
+          return priorityDiff
+        }
+        const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        if (updatedDiff !== 0) {
+          return updatedDiff
+        }
+        return b.id - a.id
+      })
+
+    const getFilterCount = (filter: RefundFilter) => {
+      if (filter === 'ALL') {
+        return refunds.length
+      }
+      return refundCounts[filter]
+    }
 
     return (
       <VStack gap="x3" className="w-full">
-        <HStack gap="x2" className="flex-wrap">
-          {refundFilters.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              aria-pressed={refundFilter === item.key}
-              className={
-                refundFilter === item.key
-                  ? 'rounded-r2 border border-stroke-brand-solid bg-bg-brand-weak px-3 py-1 text-xs font-semibold text-fg-brand'
-                  : 'rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-3 py-1 text-xs font-medium text-fg-neutral-subtle'
-              }
-              onClick={() => setRefundFilter(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </HStack>
+        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
+          <VStack gap="x2" align="flex-start">
+            <Text textStyle="t6Bold">환불 큐 요약</Text>
+            <Text textStyle="t4Regular" color="fg.neutralSubtle">
+              요청건을 우선 검수하고, 사유/금액 확인 후 승인 또는 거절을 처리하세요.
+            </Text>
+            <div className="grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              {renderSummaryCard({ label: '처리 필요', value: `${refundCounts.REQUESTED}건`, highlighted: true })}
+              {renderSummaryCard({ label: '승인', value: `${refundCounts.APPROVED}건` })}
+              {renderSummaryCard({ label: '완료', value: `${refundCounts.COMPLETED}건` })}
+              {renderSummaryCard({ label: '거절', value: `${refundCounts.REJECTED}건` })}
+              {renderSummaryCard({ label: '실패', value: `${refundCounts.FAILED}건` })}
+            </div>
+          </VStack>
+        </section>
 
-        {refunds.length === 0 ? (
-          <Text textStyle="t4Regular" color="fg.neutralSubtle">
-            관리할 환불 요청이 없습니다.
-          </Text>
-        ) : (
-          refunds.map((refund) => (
-            <section key={refund.id} className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default p-4">
-              <VStack gap="x2" align="flex-start">
-                <HStack justify="space-between" align="center" className="w-full flex-wrap gap-2">
-                  <Text textStyle="t6Bold">환불 #{refund.id}</Text>
-                  <StatusChip status={refund.status} />
-                </HStack>
-                <Text textStyle="t4Regular">paymentId: {refund.paymentId}</Text>
-                <Text textStyle="t4Regular">amount: {formatCurrency(refund.amount)}</Text>
-                <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                  요청 사유: {refund.reason ?? '-'}
-                </Text>
+        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
+          <VStack gap="x2" align="flex-start">
+            <HStack justify="space-between" align="center" className="w-full flex-wrap gap-2">
+              <Text textStyle="t5Bold">환불 필터</Text>
+              <ActionButton
+                variant="neutralWeak"
+                size="xsmall"
+                loading={adminRefundsQuery.isFetching}
+                disabled={adminRefundsQuery.isFetching}
+                onClick={() => void adminRefundsQuery.refetch()}
+              >
+                새로고침
+              </ActionButton>
+            </HStack>
+            <div className="flex w-full flex-wrap gap-2">
+              {refundFilters.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  aria-pressed={refundFilter === item.key}
+                  className={getChipButtonClass(refundFilter === item.key)}
+                  onClick={() => setRefundFilter(item.key)}
+                >
+                  {item.label} ({getFilterCount(item.key)})
+                </button>
+              ))}
+            </div>
+            {adminRefundsQuery.isFetching ? (
+              <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                최신 환불 상태를 동기화 중...
+              </Text>
+            ) : null}
+          </VStack>
+        </section>
 
-                <label className="flex w-full flex-col gap-1">
-                  <span className="text-sm text-fg-neutral-subtle">처리 코멘트 (선택)</span>
-                  <input
-                    className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                    value={refundCommentDrafts[refund.id] ?? ''}
-                    onChange={(event) =>
-                      setRefundCommentDrafts((prev) => ({
-                        ...prev,
-                        [refund.id]: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
+        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default">
+          {filteredRefunds.length === 0 ? (
+            <div className="p-4">
+              <Text textStyle="t4Regular" color="fg.neutralSubtle">
+                선택한 조건의 환불 건이 없습니다.
+              </Text>
+            </div>
+          ) : (
+            <ul>
+              {filteredRefunds.map((refund) => (
+                <li key={refund.id} className="border-t border-stroke-neutral-muted p-4 first:border-t-0">
+                  <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr_1.8fr_1.2fr] xl:items-start">
+                    <VStack gap="x1" align="flex-start">
+                      <Text textStyle="t5Bold">환불 #{refund.id}</Text>
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                        주문 #{refund.orderId} / 결제 #{refund.paymentId}
+                      </Text>
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                        요청: {formatDateTime(refund.createdAt)}
+                      </Text>
+                      <StatusChip status={refund.status} />
+                    </VStack>
 
-                {refund.status === 'REQUESTED' ? (
-                  <HStack gap="x2" className="flex-wrap">
-                    <ActionButton
-                      loading={approveRefundMutation.isPending && approveRefundMutation.variables === refund.id}
-                      disabled={approveRefundMutation.isPending || rejectRefundMutation.isPending}
-                      onClick={() => approveRefundMutation.mutate(refund.id)}
-                    >
-                      승인
-                    </ActionButton>
-                    <ActionButton
-                      variant="criticalSolid"
-                      loading={rejectRefundMutation.isPending && rejectRefundMutation.variables === refund.id}
-                      disabled={approveRefundMutation.isPending || rejectRefundMutation.isPending}
-                      onClick={() => rejectRefundMutation.mutate(refund.id)}
-                    >
-                      거절
-                    </ActionButton>
-                  </HStack>
-                ) : null}
-              </VStack>
-            </section>
-          ))
-        )}
+                    <VStack gap="x1" align="flex-start">
+                      <Text textStyle="t5Bold">{formatCurrency(refund.amount)}</Text>
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                        품목 {refund.items.length}개
+                      </Text>
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                        사유: {refund.reason ?? '-'}
+                      </Text>
+                    </VStack>
+
+                    <VStack gap="x2" align="flex-start" className="w-full">
+                      <label className="flex w-full flex-col gap-1">
+                        <span className="text-xs text-fg-neutral-subtle">처리 코멘트</span>
+                        <input
+                          className="w-full rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
+                          value={refundCommentDrafts[refund.id] ?? ''}
+                          onChange={(event) =>
+                            setRefundCommentDrafts((prev) => ({
+                              ...prev,
+                              [refund.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                        기존 코멘트: {refund.adminComment ?? '-'}
+                      </Text>
+                    </VStack>
+
+                    <VStack gap="x2" align="flex-start" className="w-full">
+                      {refund.status === 'REQUESTED' ? (
+                        <>
+                          <ActionButton
+                            className="w-full justify-center"
+                            loading={approveRefundMutation.isPending && approveRefundMutation.variables === refund.id}
+                            disabled={approveRefundMutation.isPending || rejectRefundMutation.isPending}
+                            onClick={() => approveRefundMutation.mutate(refund.id)}
+                          >
+                            승인
+                          </ActionButton>
+                          <ActionButton
+                            className="w-full justify-center"
+                            variant="criticalSolid"
+                            loading={rejectRefundMutation.isPending && rejectRefundMutation.variables === refund.id}
+                            disabled={approveRefundMutation.isPending || rejectRefundMutation.isPending}
+                            onClick={() => rejectRefundMutation.mutate(refund.id)}
+                          >
+                            거절
+                          </ActionButton>
+                        </>
+                      ) : (
+                        <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                          처리 완료 건은 상태 변경이 불가합니다.
+                        </Text>
+                      )}
+                    </VStack>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </VStack>
     )
   }
@@ -404,6 +570,7 @@ export const AdminPlaceholderPage = () => {
 
     const deliveries = adminDeliveriesQuery.data ?? []
     const staleReferenceTime = adminDeliveriesQuery.dataUpdatedAt
+
     const deliveryCounts = deliveries.reduce<Record<DeliveryStatus, number>>(
       (acc, delivery) => {
         acc[delivery.status] += 1
@@ -417,7 +584,14 @@ export const AdminPlaceholderPage = () => {
         CANCELED: 0,
       },
     )
+
     const actionRequiredCount = deliveryCounts.PREPARING + deliveryCounts.SHIPPED + deliveryCounts.IN_TRANSIT
+    const staleCount = deliveries.reduce((count, delivery) => {
+      if (getDeliveryStaleMessage(delivery, staleReferenceTime)) {
+        return count + 1
+      }
+      return count
+    }, 0)
 
     const filteredDeliveries = deliveries
       .filter((delivery) => matchesDeliveryFilter(delivery.status, deliveryFilter))
@@ -445,50 +619,32 @@ export const AdminPlaceholderPage = () => {
 
     return (
       <VStack gap="x3" className="w-full">
-        <section className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default p-4">
+        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
           <VStack gap="x2" align="flex-start">
-            <Text textStyle="t6Bold">배송 처리 큐</Text>
+            <Text textStyle="t6Bold">배송 처리 보드</Text>
             <Text textStyle="t4Regular" color="fg.neutralSubtle">
-              발송/배송중/완료 처리를 한 화면에서 빠르게 수행합니다.
+              출고 단계의 병목과 장기 정체 건을 먼저 처리하세요.
             </Text>
-
-            <div className="grid w-full gap-2 sm:grid-cols-3">
-              <div className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-3 py-3">
-                <Text textStyle="t3Regular" color="fg.neutralSubtle">
-                  처리 필요
-                </Text>
-                <Text textStyle="t5Bold">{actionRequiredCount}건</Text>
-              </div>
-              <div className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-3 py-3">
-                <Text textStyle="t3Regular" color="fg.neutralSubtle">
-                  완료
-                </Text>
-                <Text textStyle="t5Bold">{deliveryCounts.DELIVERED}건</Text>
-              </div>
-              <div className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-3 py-3">
-                <Text textStyle="t3Regular" color="fg.neutralSubtle">
-                  취소
-                </Text>
-                <Text textStyle="t5Bold">{deliveryCounts.CANCELED}건</Text>
-              </div>
+            <div className="grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {renderSummaryCard({ label: '처리 필요', value: `${actionRequiredCount}건`, highlighted: true })}
+              {renderSummaryCard({ label: '지연 의심', value: `${staleCount}건` })}
+              {renderSummaryCard({ label: '배송 완료', value: `${deliveryCounts.DELIVERED}건` })}
+              {renderSummaryCard({ label: '취소', value: `${deliveryCounts.CANCELED}건` })}
             </div>
+            {actionRequiredCount > 0 ? (
+              <div className="w-full rounded-r2 border border-stroke-warning-weak bg-bg-warning-weak px-3 py-2">
+                <Text textStyle="t3Regular" color="fg.warning">
+                  처리 필요 건이 남아 있습니다. 준비중 → 발송됨 → 배송중 → 완료 순으로 처리하세요.
+                </Text>
+              </div>
+            ) : null}
+          </VStack>
+        </section>
 
-            <div className="flex w-full flex-wrap gap-2">
-              {deliveryFilters.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  aria-pressed={deliveryFilter === item.key}
-                  className={
-                    deliveryFilter === item.key
-                      ? 'rounded-r2 border border-stroke-brand-solid bg-bg-brand-weak px-3 py-1 text-xs font-semibold text-fg-brand'
-                      : 'rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-3 py-1 text-xs font-medium text-fg-neutral-subtle'
-                  }
-                  onClick={() => setDeliveryFilter(item.key)}
-                >
-                  {item.label} ({getFilterCount(item.key)})
-                </button>
-              ))}
+        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
+          <VStack gap="x2" align="flex-start">
+            <HStack justify="space-between" align="center" className="w-full flex-wrap gap-2">
+              <Text textStyle="t5Bold">배송 필터</Text>
               <ActionButton
                 variant="neutralWeak"
                 size="xsmall"
@@ -498,117 +654,140 @@ export const AdminPlaceholderPage = () => {
               >
                 새로고침
               </ActionButton>
+            </HStack>
+            <div className="flex w-full flex-wrap gap-2">
+              {deliveryFilters.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  aria-pressed={deliveryFilter === item.key}
+                  className={getChipButtonClass(deliveryFilter === item.key)}
+                  onClick={() => setDeliveryFilter(item.key)}
+                >
+                  {item.label} ({getFilterCount(item.key)})
+                </button>
+              ))}
             </div>
-
             {adminDeliveriesQuery.isFetching ? (
               <Text textStyle="t3Regular" color="fg.neutralSubtle">
-                최신 상태로 동기화 중...
+                배송 상태를 동기화 중...
               </Text>
             ) : null}
           </VStack>
         </section>
 
         {filteredDeliveries.length === 0 ? (
-          <Text textStyle="t4Regular" color="fg.neutralSubtle">
-            선택한 조건의 배송 데이터가 없습니다.
-          </Text>
+          <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
+            <Text textStyle="t4Regular" color="fg.neutralSubtle">
+              선택한 조건의 배송 데이터가 없습니다.
+            </Text>
+          </section>
         ) : (
           filteredDeliveries.map((delivery) => {
             const shipDraft = shipDrafts[delivery.id] ?? { carrier: '', trackingNumber: '' }
             const staleMessage = getDeliveryStaleMessage(delivery, staleReferenceTime)
 
             return (
-              <section key={delivery.id} className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default p-4">
-                <VStack gap="x2" align="flex-start">
-                  <HStack justify="space-between" align="center" className="w-full flex-wrap gap-2">
-                    <Text textStyle="t6Bold">배송 #{delivery.id}</Text>
-                    <StatusChip status={delivery.status} />
-                  </HStack>
+              <section
+                key={delivery.id}
+                className={`rounded-r2 border bg-bg-layer-default p-4 ${
+                  isActionRequiredDelivery(delivery.status)
+                    ? 'border-stroke-warning-weak'
+                    : 'border-stroke-neutral-muted'
+                }`}
+              >
+                <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
+                  <VStack gap="x2" align="flex-start" className="w-full">
+                    <HStack justify="space-between" align="center" className="w-full flex-wrap gap-2">
+                      <VStack gap="x1" align="flex-start">
+                        <Text textStyle="t5Bold">배송 #{delivery.id}</Text>
+                        <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                          주문 #{delivery.orderId} / 생성 {formatDateTime(delivery.createdAt)}
+                        </Text>
+                      </VStack>
+                      <StatusChip status={delivery.status} />
+                    </HStack>
 
-                  <Text textStyle="t4Regular">orderId: {delivery.orderId}</Text>
-                  <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                    {delivery.recipientName} / {delivery.recipientPhone}
-                  </Text>
-                  <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                    주소: {delivery.address} {delivery.addressDetail} ({delivery.zipCode})
-                  </Text>
-                  <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                    생성: {formatDateTime(delivery.createdAt)}
-                  </Text>
-                  {delivery.shippedAt ? (
-                    <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                      발송: {formatDateTime(delivery.shippedAt)}
-                    </Text>
-                  ) : null}
-                  {delivery.deliveredAt ? (
-                    <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                      완료: {formatDateTime(delivery.deliveredAt)}
-                    </Text>
-                  ) : null}
-                  {delivery.carrier || delivery.trackingNumber ? (
-                    <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                      택배: {delivery.carrier ?? '-'} / {delivery.trackingNumber ?? '-'}
-                    </Text>
-                  ) : null}
-                  {staleMessage ? (
-                    <Text textStyle="t4Medium" color="fg.warning">
-                      {staleMessage}
-                    </Text>
-                  ) : null}
-
-                  {delivery.status === 'PREPARING' ? (
                     <div className="grid w-full gap-2 md:grid-cols-2">
-                      <label className="flex w-full flex-col gap-1">
-                        <span className="text-sm text-fg-neutral-subtle">carrier</span>
-                        <input
-                          className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                          value={shipDraft.carrier}
-                          onChange={(event) =>
-                            setShipDrafts((prev) => ({
-                              ...prev,
-                              [delivery.id]: {
-                                ...shipDraft,
-                                carrier: event.target.value,
-                              },
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="flex w-full flex-col gap-1">
-                        <span className="text-sm text-fg-neutral-subtle">trackingNumber</span>
-                        <input
-                          className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                          value={shipDraft.trackingNumber}
-                          onChange={(event) =>
-                            setShipDrafts((prev) => ({
-                              ...prev,
-                              [delivery.id]: {
-                                ...shipDraft,
-                                trackingNumber: event.target.value,
-                              },
-                            }))
-                          }
-                        />
-                      </label>
+                      <Text textStyle="t4Regular" color="fg.neutralSubtle">
+                        수령인: {delivery.recipientName} ({delivery.recipientPhone})
+                      </Text>
+                      <Text textStyle="t4Regular" color="fg.neutralSubtle">
+                        우편번호: {delivery.zipCode}
+                      </Text>
                     </div>
-                  ) : null}
 
-                  {delivery.status !== 'DELIVERED' && delivery.status !== 'CANCELED' ? (
-                    <Text textStyle="t3Regular" color="fg.warning">
-                      주의: 배송 취소는 환불/고객 커뮤니케이션 후속 작업이 필요합니다.
+                    <Text textStyle="t4Regular" color="fg.neutralSubtle" className="break-words">
+                      주소: {delivery.address} {delivery.addressDetail}
                     </Text>
-                  ) : null}
 
-                  <div className="grid w-full gap-2 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid w-full gap-2 md:grid-cols-3">
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                        발송: {delivery.shippedAt ? formatDateTime(delivery.shippedAt) : '-'}
+                      </Text>
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                        배송완료: {delivery.deliveredAt ? formatDateTime(delivery.deliveredAt) : '-'}
+                      </Text>
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle" className="break-words">
+                        택배사/송장: {delivery.carrier ?? '-'} / {delivery.trackingNumber ?? '-'}
+                      </Text>
+                    </div>
+
+                    {staleMessage ? (
+                      <div className="w-full rounded-r2 border border-stroke-warning-weak bg-bg-warning-weak px-3 py-2">
+                        <Text textStyle="t3Regular" color="fg.warning">
+                          {staleMessage}
+                        </Text>
+                      </div>
+                    ) : null}
+                  </VStack>
+
+                  <VStack gap="x2" align="flex-start" className="w-full rounded-r2 bg-bg-layer-floating p-3">
+                    <Text textStyle="t4Medium">상태 전환 액션</Text>
+
                     {delivery.status === 'PREPARING' ? (
-                      <ActionButton
-                        className="w-full justify-center"
-                        loading={shipDeliveryMutation.isPending && shipDeliveryMutation.variables === delivery.id}
-                        disabled={shipDeliveryMutation.isPending}
-                        onClick={() => shipDeliveryMutation.mutate(delivery.id)}
-                      >
-                        발송 처리
-                      </ActionButton>
+                      <>
+                        <label className="flex w-full flex-col gap-1">
+                          <span className="text-xs text-fg-neutral-subtle">carrier</span>
+                          <input
+                            className="w-full rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-x3 py-x2"
+                            value={shipDraft.carrier}
+                            onChange={(event) =>
+                              setShipDrafts((prev) => ({
+                                ...prev,
+                                [delivery.id]: {
+                                  ...shipDraft,
+                                  carrier: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="flex w-full flex-col gap-1">
+                          <span className="text-xs text-fg-neutral-subtle">trackingNumber</span>
+                          <input
+                            className="w-full rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-x3 py-x2"
+                            value={shipDraft.trackingNumber}
+                            onChange={(event) =>
+                              setShipDrafts((prev) => ({
+                                ...prev,
+                                [delivery.id]: {
+                                  ...shipDraft,
+                                  trackingNumber: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                        <ActionButton
+                          className="w-full justify-center"
+                          loading={shipDeliveryMutation.isPending && shipDeliveryMutation.variables === delivery.id}
+                          disabled={shipDeliveryMutation.isPending}
+                          onClick={() => shipDeliveryMutation.mutate(delivery.id)}
+                        >
+                          발송 처리
+                        </ActionButton>
+                      </>
                     ) : null}
 
                     {delivery.status === 'SHIPPED' ? (
@@ -649,21 +828,31 @@ export const AdminPlaceholderPage = () => {
                         배송 취소
                       </ActionButton>
                     ) : null}
-                  </div>
-                </VStack>
+
+                    {delivery.status === 'DELIVERED' || delivery.status === 'CANCELED' ? (
+                      <Text textStyle="t3Regular" color="fg.neutralSubtle">
+                        종료 상태입니다. 추가 상태 전환은 지원하지 않습니다.
+                      </Text>
+                    ) : (
+                      <Text textStyle="t3Regular" color="fg.warning">
+                        취소 전 고객 안내/환불 후속 작업 여부를 반드시 확인하세요.
+                      </Text>
+                    )}
+                  </VStack>
+                </div>
               </section>
             )
           })
         )}
 
-        <section className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default p-4">
+        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
           <VStack gap="x2" align="flex-start">
-            <Text textStyle="t6Bold">배송 생성</Text>
+            <Text textStyle="t6Bold">신규 배송 등록</Text>
             <Text textStyle="t3Regular" color="fg.neutralSubtle">
-              신규 주문 배송을 등록하면 즉시 처리 큐에 반영됩니다.
+              주문 배송정보를 입력하면 처리 큐에 즉시 반영됩니다.
             </Text>
 
-            <div className="grid w-full gap-2 md:grid-cols-2">
+            <div className="grid w-full gap-2 md:grid-cols-3">
               <label className="flex w-full flex-col gap-1">
                 <span className="text-sm text-fg-neutral-subtle">orderId</span>
                 <input
@@ -690,12 +879,23 @@ export const AdminPlaceholderPage = () => {
                   onChange={(event) => setCreateDeliveryRecipientPhone(event.target.value)}
                 />
               </label>
+            </div>
+
+            <div className="grid w-full gap-2 md:grid-cols-2">
               <label className="flex w-full flex-col gap-1">
                 <span className="text-sm text-fg-neutral-subtle">zipCode</span>
                 <input
                   className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
                   value={createDeliveryZipCode}
                   onChange={(event) => setCreateDeliveryZipCode(event.target.value)}
+                />
+              </label>
+              <label className="flex w-full flex-col gap-1">
+                <span className="text-sm text-fg-neutral-subtle">addressDetail</span>
+                <input
+                  className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
+                  value={createDeliveryAddressDetail}
+                  onChange={(event) => setCreateDeliveryAddressDetail(event.target.value)}
                 />
               </label>
             </div>
@@ -706,14 +906,6 @@ export const AdminPlaceholderPage = () => {
                 className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
                 value={createDeliveryAddress}
                 onChange={(event) => setCreateDeliveryAddress(event.target.value)}
-              />
-            </label>
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm text-fg-neutral-subtle">addressDetail</span>
-              <input
-                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                value={createDeliveryAddressDetail}
-                onChange={(event) => setCreateDeliveryAddressDetail(event.target.value)}
               />
             </label>
 
@@ -728,9 +920,17 @@ export const AdminPlaceholderPage = () => {
 
   const renderOperationsPanel = () => (
     <VStack gap="x3" className="w-full">
-      <section className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default p-4">
+      <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
         <VStack gap="x2" align="flex-start">
-          <Text textStyle="t6Bold">주문 완료 처리</Text>
+          <Text textStyle="t6Bold">주문 상태 보정</Text>
+          <Text textStyle="t3Regular" color="fg.neutralSubtle">
+            결제/배송 후속 처리 완료 시 주문 상태를 완료로 전환합니다.
+          </Text>
+          <div className="w-full rounded-r2 border border-stroke-warning-weak bg-bg-warning-weak px-3 py-2">
+            <Text textStyle="t3Regular" color="fg.warning">
+              주문 완료 처리는 고객 주문 화면에 즉시 반영됩니다.
+            </Text>
+          </div>
           <label className="flex w-full flex-col gap-1">
             <span className="text-sm text-fg-neutral-subtle">orderId</span>
             <input
@@ -747,128 +947,145 @@ export const AdminPlaceholderPage = () => {
         </VStack>
       </section>
 
-      <section className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default p-4">
-        <VStack gap="x2" align="flex-start">
-          <Text textStyle="t6Bold">재고 조회 / 추가</Text>
-          <label className="flex w-full flex-col gap-1">
-            <span className="text-sm text-fg-neutral-subtle">productId</span>
-            <input
-              className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-              type="number"
-              inputMode="numeric"
-              value={inventoryProductIdInput}
-              onChange={(event) => setInventoryProductIdInput(event.target.value)}
-            />
-          </label>
-          <ActionButton variant="neutralWeak" size="xsmall" onClick={() => void inventoryQuery.refetch()}>
-            재고 조회
-          </ActionButton>
+      <div className="grid gap-3 xl:grid-cols-2">
+        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
+          <VStack gap="x2" align="flex-start">
+            <Text textStyle="t6Bold">재고 관리</Text>
+            <Text textStyle="t3Regular" color="fg.neutralSubtle">
+              조회 후 즉시 수량 보정을 적용합니다.
+            </Text>
 
-          {inventoryQuery.data ? (
-            <VStack gap="x1" align="flex-start" className="w-full rounded-r2 bg-bg-layer-floating px-3 py-3">
-              <Text textStyle="t4Regular">available: {inventoryQuery.data.quantityAvailable}</Text>
-              <Text textStyle="t4Regular">reserved: {inventoryQuery.data.quantityReserved}</Text>
-              <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                updated: {formatDateTime(inventoryQuery.data.updatedAt)}
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm text-fg-neutral-subtle">productId</span>
+              <input
+                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
+                type="number"
+                inputMode="numeric"
+                value={inventoryProductIdInput}
+                onChange={(event) => setInventoryProductIdInput(event.target.value)}
+              />
+            </label>
+
+            <ActionButton variant="neutralWeak" size="xsmall" disabled={!canLookupInventory} onClick={() => void inventoryQuery.refetch()}>
+              재고 조회
+            </ActionButton>
+
+            {inventoryQuery.isLoading ? <Text textStyle="t3Regular">재고 정보를 조회 중...</Text> : null}
+            {inventoryQuery.isError ? (
+              <Text textStyle="t3Regular" color="fg.critical">
+                {getErrorMessage(inventoryQuery.error)}
               </Text>
-            </VStack>
-          ) : null}
+            ) : null}
 
-          <label className="flex w-full flex-col gap-1">
-            <span className="text-sm text-fg-neutral-subtle">add quantity</span>
-            <input
-              className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-              type="number"
-              inputMode="numeric"
-              value={addStockQuantityInput}
-              onChange={(event) => setAddStockQuantityInput(event.target.value)}
-            />
-          </label>
-          <ActionButton loading={addStockMutation.isPending} disabled={addStockMutation.isPending} onClick={() => addStockMutation.mutate()}>
-            재고 추가
-          </ActionButton>
-        </VStack>
-      </section>
+            {inventoryQuery.data ? (
+              <VStack gap="x1" align="flex-start" className="w-full rounded-r2 bg-bg-layer-floating px-3 py-3">
+                <Text textStyle="t4Regular">available: {inventoryQuery.data.quantityAvailable}</Text>
+                <Text textStyle="t4Regular">reserved: {inventoryQuery.data.quantityReserved}</Text>
+                <Text textStyle="t4Regular" color="fg.neutralSubtle">
+                  updated: {formatDateTime(inventoryQuery.data.updatedAt)}
+                </Text>
+              </VStack>
+            ) : null}
 
-      <section className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default p-4">
-        <VStack gap="x2" align="flex-start">
-          <Text textStyle="t6Bold">상품 등록</Text>
-          <label className="flex w-full flex-col gap-1">
-            <span className="text-sm text-fg-neutral-subtle">name</span>
-            <input
-              className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-              value={productNameInput}
-              onChange={(event) => setProductNameInput(event.target.value)}
-            />
-          </label>
-          <label className="flex w-full flex-col gap-1">
-            <span className="text-sm text-fg-neutral-subtle">description</span>
-            <input
-              className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-              value={productDescriptionInput}
-              onChange={(event) => setProductDescriptionInput(event.target.value)}
-            />
-          </label>
-          <label className="flex w-full flex-col gap-1">
-            <span className="text-sm text-fg-neutral-subtle">unitPrice</span>
-            <input
-              className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-              type="number"
-              value={productUnitPriceInput}
-              onChange={(event) => setProductUnitPriceInput(event.target.value)}
-            />
-          </label>
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm text-fg-neutral-subtle">add quantity</span>
+              <input
+                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
+                type="number"
+                inputMode="numeric"
+                value={addStockQuantityInput}
+                onChange={(event) => setAddStockQuantityInput(event.target.value)}
+              />
+            </label>
 
-          <ActionButton loading={createProductMutation.isPending} disabled={createProductMutation.isPending} onClick={() => createProductMutation.mutate()}>
-            상품 등록
-          </ActionButton>
-        </VStack>
-      </section>
+            <ActionButton loading={addStockMutation.isPending} disabled={addStockMutation.isPending} onClick={() => addStockMutation.mutate()}>
+              재고 추가
+            </ActionButton>
+          </VStack>
+        </section>
+
+        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
+          <VStack gap="x2" align="flex-start">
+            <Text textStyle="t6Bold">상품 등록</Text>
+            <Text textStyle="t3Regular" color="fg.neutralSubtle">
+              필수 정보 입력 후 판매 상품을 등록합니다.
+            </Text>
+
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm text-fg-neutral-subtle">name</span>
+              <input
+                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
+                value={productNameInput}
+                onChange={(event) => setProductNameInput(event.target.value)}
+              />
+            </label>
+
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm text-fg-neutral-subtle">description</span>
+              <input
+                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
+                value={productDescriptionInput}
+                onChange={(event) => setProductDescriptionInput(event.target.value)}
+              />
+            </label>
+
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm text-fg-neutral-subtle">unitPrice</span>
+              <input
+                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
+                type="number"
+                value={productUnitPriceInput}
+                onChange={(event) => setProductUnitPriceInput(event.target.value)}
+              />
+            </label>
+
+            <ActionButton loading={createProductMutation.isPending} disabled={createProductMutation.isPending} onClick={() => createProductMutation.mutate()}>
+              상품 등록
+            </ActionButton>
+          </VStack>
+        </section>
+      </div>
     </VStack>
   )
 
-  if (inventoryQuery.isError && activePanel === 'operations') {
-    return <ErrorView message={getErrorMessage(inventoryQuery.error)} onRetry={() => void inventoryQuery.refetch()} />
-  }
-
   return (
-    <VStack gap="x5">
-      <section className="rounded-r3 border border-stroke-neutral-subtle bg-bg-layer-floating px-5 py-6">
+    <VStack gap="x5" className="w-full">
+      <section className="rounded-r3 border border-stroke-neutral-muted bg-bg-layer-floating px-5 py-6">
         <VStack gap="x2" align="flex-start">
           <Text textStyle="t7Bold">관리자 운영 센터</Text>
           <Text textStyle="t4Regular" color="fg.neutralSubtle">
-            환불, 배송, 주문/재고/상품 작업을 한 곳에서 처리합니다.
+            환불, 배송, 운영 액션을 업무 흐름 기준으로 분리해 빠르게 처리할 수 있도록 구성했습니다.
           </Text>
-          <HStack gap="x2" className="flex-wrap">
-            <ActionButton
-              aria-pressed={activePanel === 'refunds'}
-              variant={activePanel === 'refunds' ? 'neutralSolid' : 'neutralWeak'}
-              onClick={() => setActivePanel('refunds')}
-            >
-              환불 관리
-            </ActionButton>
-            <ActionButton
-              aria-pressed={activePanel === 'deliveries'}
-              variant={activePanel === 'deliveries' ? 'neutralSolid' : 'neutralWeak'}
-              onClick={() => setActivePanel('deliveries')}
-            >
-              배송 관리
-            </ActionButton>
-            <ActionButton
-              aria-pressed={activePanel === 'operations'}
-              variant={activePanel === 'operations' ? 'neutralSolid' : 'neutralWeak'}
-              onClick={() => setActivePanel('operations')}
-            >
-              운영 도구
-            </ActionButton>
-          </HStack>
+
+          <div className="mt-2 grid w-full gap-2 md:grid-cols-3">
+            {panelTabs.map((panel) => (
+              <button
+                key={panel.key}
+                type="button"
+                aria-pressed={activePanel === panel.key}
+                className={getPanelTabClass(activePanel === panel.key)}
+                onClick={() => setActivePanel(panel.key)}
+              >
+                <VStack gap="x1" align="flex-start" className="w-full">
+                  <Text textStyle="t5Bold" className="leading-tight">
+                    {panel.title}
+                  </Text>
+                  <Text textStyle="t3Regular" color="fg.neutralSubtle" className="leading-tight">
+                    {panel.description}
+                  </Text>
+                </VStack>
+              </button>
+            ))}
+          </div>
         </VStack>
       </section>
 
       {actionErrorMessage ? (
-        <Text textStyle="t4Regular" color="fg.critical">
-          {actionErrorMessage}
-        </Text>
+        <section className="rounded-r2 border border-stroke-critical-weak bg-bg-critical-weak px-4 py-3">
+          <Text textStyle="t4Regular" color="fg.critical">
+            {actionErrorMessage}
+          </Text>
+        </section>
       ) : null}
 
       {activePanel === 'refunds' ? renderRefundPanel() : null}

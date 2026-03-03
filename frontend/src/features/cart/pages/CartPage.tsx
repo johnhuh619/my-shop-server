@@ -11,10 +11,30 @@ import { formatCurrency } from '@/shared/utils/format'
 const isPurchasable = (item: { status: string; quantityAvailable: number | null }) =>
   item.status === 'ACTIVE' && (item.quantityAvailable === null || item.quantityAvailable > 0)
 
+type ShippingForm = {
+  recipientName: string
+  recipientPhone: string
+  address: string
+  addressDetail: string
+  zipCode: string
+}
+
+type ShippingField = keyof ShippingForm
+
+const createInitialShippingForm = (): ShippingForm => ({
+  recipientName: '',
+  recipientPhone: '',
+  address: '',
+  addressDetail: '',
+  zipCode: '',
+})
+
 export const CartPage = () => {
   const navigate = useNavigate()
   const auth = useAuth()
   const cart = useCart()
+  const [shippingForm, setShippingForm] = useState<ShippingForm>(createInitialShippingForm)
+  const [shippingErrors, setShippingErrors] = useState<Partial<Record<ShippingField, string>>>({})
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>(() =>
     cart.items.filter((item) => isPurchasable(item)).map((item) => item.productId),
   )
@@ -51,6 +71,11 @@ export const CartPage = () => {
           productId: item.productId,
           quantity: item.quantity,
         })),
+        recipientName: shippingForm.recipientName.trim(),
+        recipientPhone: shippingForm.recipientPhone.trim(),
+        address: shippingForm.address.trim(),
+        addressDetail: shippingForm.addressDetail.trim() || undefined,
+        zipCode: shippingForm.zipCode.trim(),
       }),
     onSuccess: (order) => {
       cart.removeItems(selectedItems.map((item) => item.productId))
@@ -73,6 +98,50 @@ export const CartPage = () => {
     setSelectedProductIds(allPurchasableIds)
   }
 
+  const updateShippingField = (field: ShippingField, value: string) => {
+    setShippingForm((prev) => ({ ...prev, [field]: value }))
+    setShippingErrors((prev) => {
+      if (!prev[field]) {
+        return prev
+      }
+
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  const validateShippingForm = () => {
+    const nextErrors: Partial<Record<ShippingField, string>> = {}
+    const recipientName = shippingForm.recipientName.trim()
+    const recipientPhone = shippingForm.recipientPhone.trim()
+    const address = shippingForm.address.trim()
+    const zipCode = shippingForm.zipCode.trim()
+
+    if (!recipientName) {
+      nextErrors.recipientName = '수령인 이름을 입력해주세요.'
+    }
+
+    if (!recipientPhone) {
+      nextErrors.recipientPhone = '연락처를 입력해주세요.'
+    } else if (!/^[0-9+()\-\s]{8,20}$/.test(recipientPhone)) {
+      nextErrors.recipientPhone = '연락처 형식을 확인해주세요.'
+    }
+
+    if (!address) {
+      nextErrors.address = '주소를 입력해주세요.'
+    }
+
+    if (!zipCode) {
+      nextErrors.zipCode = '우편번호를 입력해주세요.'
+    } else if (!/^\d{5}$/.test(zipCode)) {
+      nextErrors.zipCode = '우편번호 5자리를 입력해주세요.'
+    }
+
+    setShippingErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
+  }
+
   const handleCheckoutSelected = () => {
     if (selectedItems.length < 1 || checkoutMutation.isPending) {
       return
@@ -80,6 +149,10 @@ export const CartPage = () => {
 
     if (!auth.isAuthenticated) {
       navigate('/login', { state: { redirectTo: '/cart' } })
+      return
+    }
+
+    if (!validateShippingForm()) {
       return
     }
 
@@ -253,6 +326,91 @@ export const CartPage = () => {
 
         <section className="rounded-r3 border border-stroke-neutral-subtle bg-bg-layer-floating p-5">
           <VStack gap="x3" align="stretch">
+            <Text textStyle="t5Bold">배송 정보</Text>
+            <Text textStyle="t4Regular" color="fg.neutralSubtle">
+              주문 생성 시 아래 배송지 정보가 함께 저장됩니다.
+            </Text>
+
+            <div className="grid grid-cols-1 gap-3">
+              <label className="flex flex-col gap-1">
+                <Text textStyle="t4Medium">수령인 *</Text>
+                <input
+                  className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-x3 py-x2"
+                  value={shippingForm.recipientName}
+                  onChange={(event) => updateShippingField('recipientName', event.target.value)}
+                  placeholder="홍길동"
+                  aria-invalid={!!shippingErrors.recipientName}
+                />
+                {shippingErrors.recipientName ? (
+                  <Text textStyle="t3Regular" color="fg.critical">
+                    {shippingErrors.recipientName}
+                  </Text>
+                ) : null}
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <Text textStyle="t4Medium">연락처 *</Text>
+                <input
+                  className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-x3 py-x2"
+                  value={shippingForm.recipientPhone}
+                  onChange={(event) => updateShippingField('recipientPhone', event.target.value)}
+                  placeholder="010-1234-5678"
+                  aria-invalid={!!shippingErrors.recipientPhone}
+                />
+                {shippingErrors.recipientPhone ? (
+                  <Text textStyle="t3Regular" color="fg.critical">
+                    {shippingErrors.recipientPhone}
+                  </Text>
+                ) : null}
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <Text textStyle="t4Medium">주소 *</Text>
+                <input
+                  className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-x3 py-x2"
+                  value={shippingForm.address}
+                  onChange={(event) => updateShippingField('address', event.target.value)}
+                  placeholder="서울시 강남구"
+                  aria-invalid={!!shippingErrors.address}
+                />
+                {shippingErrors.address ? (
+                  <Text textStyle="t3Regular" color="fg.critical">
+                    {shippingErrors.address}
+                  </Text>
+                ) : null}
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <Text textStyle="t4Medium">상세주소</Text>
+                <input
+                  className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-x3 py-x2"
+                  value={shippingForm.addressDetail}
+                  onChange={(event) => updateShippingField('addressDetail', event.target.value)}
+                  placeholder="101동 1001호"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <Text textStyle="t4Medium">우편번호 *</Text>
+                <input
+                  className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-default px-x3 py-x2"
+                  value={shippingForm.zipCode}
+                  onChange={(event) => updateShippingField('zipCode', event.target.value)}
+                  placeholder="06000"
+                  inputMode="numeric"
+                  maxLength={5}
+                  aria-invalid={!!shippingErrors.zipCode}
+                />
+                {shippingErrors.zipCode ? (
+                  <Text textStyle="t3Regular" color="fg.critical">
+                    {shippingErrors.zipCode}
+                  </Text>
+                ) : null}
+              </label>
+            </div>
+
+            <div className="h-px w-full bg-stroke-neutral-subtle" />
+
             <Text textStyle="t5Bold">예상 결제 금액</Text>
             <VStack gap="x1" align="stretch" className="rounded-r2 bg-bg-neutral-weak px-4 py-3">
               <HStack justify="space-between" align="center">

@@ -48,7 +48,7 @@ export const MyPage = () => {
 
   return (
     <VStack gap="x5">
-      <section className="rounded-r3 border border-stroke-neutral-subtle bg-bg-layer-floating px-5 py-6">
+      <section className="rounded-r3 border border-stroke-neutral-muted bg-bg-layer-floating px-5 py-6">
         <VStack gap="x2" align="flex-start">
           <Text textStyle="t7Bold">계정 정보</Text>
           <Text textStyle="t4Regular" color="fg.neutralSubtle">
@@ -60,7 +60,7 @@ export const MyPage = () => {
         </VStack>
       </section>
 
-      <section className="rounded-r3 border border-stroke-neutral-subtle bg-bg-layer-floating p-5">
+      <section className="rounded-r3 border border-stroke-neutral-muted bg-bg-layer-floating p-5">
         <VStack gap="x2" align="flex-start">
           <Text textStyle="t5Bold">프로필</Text>
           <Text textStyle="t4Regular">ID: {me.id}</Text>
@@ -124,4 +124,5 @@ export const MyPage = () => {
     </VStack>
   )
 }
+
 

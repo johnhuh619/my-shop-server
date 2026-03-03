@@ -1,9 +1,8 @@
 ﻿import { ActionButton, HStack, Text, VStack } from '@seed-design/react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useCart } from '@/features/cart/hooks/useCart'
-import { orderApi } from '@/features/order/api/orderApi'
 import { productApi } from '@/features/product/api/productApi'
 import { useAuth } from '@/shared/auth/useAuth'
 import { ErrorView } from '@/shared/ui/ErrorView'
@@ -24,16 +23,6 @@ export const ProductDetailPage = () => {
     queryKey: ['product', id],
     queryFn: () => productApi.getProduct(id),
     enabled: Number.isFinite(id),
-  })
-
-  const buyNowMutation = useMutation({
-    mutationFn: () =>
-      orderApi.createOrder({
-        items: [{ productId: id, quantity }],
-      }),
-    onSuccess: (order) => {
-      navigate(`/checkout/${order.id}`)
-    },
   })
 
   if (!Number.isFinite(id)) {
@@ -72,7 +61,16 @@ export const ProductDetailPage = () => {
       return
     }
 
-    buyNowMutation.mutate()
+    cart.addItem({
+      productId: product.id,
+      name: product.name,
+      description: product.description,
+      unitPrice: product.unitPrice,
+      status: product.status,
+      quantityAvailable: product.quantityAvailable,
+      quantity,
+    })
+    navigate('/cart')
   }
 
   const handleAddCart = () => {
@@ -95,7 +93,7 @@ export const ProductDetailPage = () => {
           <VStack gap="x1" align="flex-start">
             <Text textStyle="t7Bold">상품 상세</Text>
             <Text textStyle="t4Regular" color="fg.neutralSubtle">
-              바로 구매 또는 장바구니 담기 중 원하는 방식으로 구매를 진행하세요.
+              장바구니에 담은 뒤 배송 정보를 입력하고 결제를 진행하세요.
             </Text>
           </VStack>
           <Link to="/products" className="text-sm font-medium text-fg-neutral-subtle underline">
@@ -180,15 +178,13 @@ export const ProductDetailPage = () => {
               <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                 <ActionButton
                   className="w-full"
-                  loading={buyNowMutation.isPending}
                   disabled={
-                    buyNowMutation.isPending ||
                     isOutOfStock ||
                     (product.quantityAvailable !== null && product.quantityAvailable < quantity)
                   }
                   onClick={handleBuyNow}
                 >
-                  {auth.isAuthenticated ? '바로 구매' : '로그인 후 바로 구매'}
+                  {auth.isAuthenticated ? '장바구니로 결제' : '로그인 후 결제'}
                 </ActionButton>
                 <ActionButton
                   className="w-full"
@@ -206,11 +202,6 @@ export const ProductDetailPage = () => {
                 </Text>
               ) : null}
 
-              {buyNowMutation.isError ? (
-                <Text textStyle="t3Regular" color="fg.critical">
-                  {getErrorMessage(buyNowMutation.error)}
-                </Text>
-              ) : null}
             </VStack>
           </section>
         </div>

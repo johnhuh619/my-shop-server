@@ -66,6 +66,11 @@ export interface OrderItemRequest {
 
 export interface CreateOrderRequest {
   items: OrderItemRequest[]
+  recipientName: string
+  recipientPhone: string
+  address: string
+  addressDetail?: string
+  zipCode: string
 }
 
 export interface OrderItemResponse {
@@ -84,6 +89,7 @@ export interface OrderResponse {
   status: OrderStatus
   totalAmount: number
   items: OrderItemResponse[]
+  deliveryStatus?: DeliveryStatus | null
   createdAt: string
   updatedAt: string
 }
@@ -169,4 +175,3 @@ export interface DeliveryResponse {
   shippedAt: string | null
   deliveredAt: string | null
 }
-

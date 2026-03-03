@@ -73,7 +73,7 @@ export const AppRouter = () => {
             </RequireAuth>
           }
         >
-          <Route index element={<Navigate to="account" replace />} />
+          <Route index element={<Navigate to="orders" replace />} />
           <Route path="account" element={<MyPage />} />
           <Route path="orders" element={<OrderListPage />} />
           <Route path="orders/:orderId" element={<OrderDetailPage />} />

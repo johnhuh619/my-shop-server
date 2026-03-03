@@ -144,6 +144,16 @@ Important:
 - Confirm payload `orderId` must be `tossOrderId` (string).
 - Do not send DB order id in confirm `orderId`.
 
+### Order -> Payment (Current Contract)
+- `POST /api/orders` must include delivery snapshot fields:
+  - `recipientName` (required)
+  - `recipientPhone` (required)
+  - `address` (required)
+  - `addressDetail` (optional)
+  - `zipCode` (required)
+- Checkout UI must treat payment confirm as phase completion, not whole flow completion.
+- After confirm success, surface async follow-up state (`markAsPaid` / delivery creation) with polling + manual refresh path.
+
 ### Async Status Flows
 Payment/refund/delivery can update asynchronously.
 Use refetch or polling and keep UI states non-terminal until confirmed.

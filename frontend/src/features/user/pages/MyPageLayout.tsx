@@ -9,11 +9,6 @@ type MySection = {
 
 const sections: MySection[] = [
   {
-    to: 'account',
-    label: '계정정보',
-    description: '계정 상태와 기본 프로필을 확인하고 관리합니다.',
-  },
-  {
     to: 'orders',
     label: '주문',
     description: '주문 상세에서 결제/환불/배송 흐름까지 이어서 처리합니다.',
@@ -22,6 +17,11 @@ const sections: MySection[] = [
     to: 'deliveries',
     label: '배송',
     description: '배송 상태를 주기적으로 확인하고 주문 상세로 연결합니다.',
+  },
+  {
+    to: 'account',
+    label: '내정보',
+    description: '계정 상태와 기본 프로필을 확인하고 관리합니다.',
   },
 ]
 
@@ -45,7 +45,7 @@ export const MyPageLayout = () => {
 
   return (
     <VStack gap="x5">
-      <section className="rounded-r3 border border-stroke-neutral-subtle bg-bg-layer-floating px-5 py-6">
+      <section className="rounded-r3 border border-stroke-neutral-muted bg-bg-layer-floating px-5 py-6">
         <VStack gap="x3" align="flex-start">
           <VStack gap="x1" align="flex-start">
             <Text textStyle="t7Bold">내정보</Text>
@@ -74,4 +74,5 @@ export const MyPageLayout = () => {
     </VStack>
   )
 }
+
 
