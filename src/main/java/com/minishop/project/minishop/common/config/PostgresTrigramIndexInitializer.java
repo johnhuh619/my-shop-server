@@ -15,7 +15,7 @@ import java.util.Locale;
 
 @Slf4j
 @Component
-@Profile({"default", "dev", "docker"})
+@Profile({"default", "dev", "docker", "prod"})
 @RequiredArgsConstructor
 public class PostgresTrigramIndexInitializer implements ApplicationRunner {
     // TODO(minishop-ddl): Development convenience only.
