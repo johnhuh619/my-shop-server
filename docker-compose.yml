@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: minishop-postgres
+    environment:
+      POSTGRES_DB: minishop
+      POSTGRES_USER: minishop
+      POSTGRES_PASSWORD: minishop
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minishop -d minishop"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: minishop-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  pg-mock:
+    image: wiremock/wiremock:3.13.1
+    container_name: minishop-pg-mock
+    command:
+      - "--global-response-templating"
+      - "--verbose"
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./infra/wiremock:/home/wiremock
+
+  app:
+    build:
+      context: .
+    container_name: minishop-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pg-mock:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: minishop
+      DB_USER: minishop
+      DB_PASSWORD: minishop
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TOSS_SECRET_KEY: test_sk_minishop
+      TOSS_CLIENT_KEY: test_ck_minishop
+      TOSS_BASE_URL: http://pg-mock:8080/v1
+      JWT_SECRET: minishop-secret-key-for-jwt-token-generation-must-be-at-least-256-bits
+    ports:
+      - "8080:8080"
+
+  k6:
+    image: grafana/k6:0.57.0
+    container_name: minishop-k6
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      BASE_URL: http://app:8080
+    volumes:
+      - ./scripts/k6:/scripts

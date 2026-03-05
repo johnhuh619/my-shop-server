@@ -46,6 +46,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByIdWithItems(@Param("id") Long id);
 
     /**
+     * Order + OrderItems 즉시 로딩 + 비관적 락
+     * 트랜잭션 분리 후 상태 전이에서 사용 (짧은 락 + items 접근)
+     */
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.id = :id")
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Order> findByIdWithItemsAndLock(@Param("id") Long id);
+
+    /**
      * 사용자의 주문 목록 + OrderItems 즉시 로딩 (N+1 방지)
      */
     @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.userId = :userId")

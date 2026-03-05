@@ -1,0 +1,16 @@
+.git
+.gitignore
+.idea
+.gradle
+build
+out
+bin
+*.iml
+*.log
+*.tmp
+.DS_Store
+node_modules
+frontend
+docs
+scripts
+infra

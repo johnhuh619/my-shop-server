@@ -90,6 +90,7 @@ Use `./gradlew` (or `gradlew.bat` on Windows) instead of a globally installed Gr
 1. `docs/ARCHITECTURE.md` - System architecture and design decisions (WHY)
 2. `docs/DOMAIN_RULES.md` - Domain invariants and business rules (WHAT MUST NOT BREAK)
 3. `docs/PACKAGE_RULES.md` - Package structure and dependency rules (HOW CODE IS ORGANIZED)
+4. `docs/READINESS_CHECKLIST.md` - 배포 준비도 체크리스트 (완성도 점검 시 필수 참조)
 
 ### Mandatory Rules
 
@@ -140,3 +141,9 @@ if transaction boundaries are unclear: STOP and ASK before coding
 2. Verify the rule compliance with `docs/DOMAIN_RULES.md`
 3. Confirm the package location with `docs/PACKAGE_RULES.md`
 4. If unclear, **ask before implementing**
+
+### Readiness Check (완성도 점검)
+- 완성도 체크 요청 시 **반드시** `docs/READINESS_CHECKLIST.md`를 먼저 읽고 기준으로 삼는다.
+- Serena 도구(`find_symbol`, `get_symbols_overview` 등)를 사용하여 각 체크 항목의 실제 코드 존재 여부를 검증한다.
+- 점검 결과에 따라 체크리스트 문서의 상태(`[x]`, `[ ]`, `[!]`)와 배포 차단 이슈를 갱신한다.
+- 새 기능 추가/삭제 시 체크리스트에도 반영한다.

@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
 import com.minishop.project.minishop.auth.service.TokenBlacklistService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.*;
  * - 소유권 검증
  */
 @SpringBootTest
-@Transactional
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class OrderServiceTest {
 
     @MockitoBean
@@ -57,7 +57,7 @@ class OrderServiceTest {
 
     @AfterEach
     void tearDown() {
-        // @Transactional이 롤백하므로 수동 정리 불필요
+        // @DirtiesContext가 컨텍스트를 재생성하므로 수동 정리 불필요
     }
 
     // ============================================
@@ -308,12 +308,12 @@ class OrderServiceTest {
                 "홍길동", "010-1234-5678", "서울시 강남구", null, "06000");
 
         // When
-        Order first = orderService.markAsPaid(order.getId());
-        Order second = orderService.markAsPaid(order.getId());
+        orderService.markAsPaid(order.getId());
+        orderService.markAsPaid(order.getId());
 
         // Then
-        assertThat(first.getStatus()).isEqualTo(OrderStatus.PAID);
-        assertThat(second.getStatus()).isEqualTo(OrderStatus.PAID);
+        Order result = orderRepository.findById(order.getId()).orElseThrow();
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.PAID);
 
         Inventory inventory = inventoryService.getByProductId(product.getId());
         assertThat(inventory.getQuantityAvailable()).isEqualTo(5L);
@@ -385,7 +385,7 @@ class OrderServiceTest {
         productRepository.save(product);
 
         // Then: OrderItem 가격은 변경되지 않음 (스냅샷 유지)
-        Order retrievedOrder = orderService.getOrder(order.getId(), testUserId);
+        Order retrievedOrder = orderRepository.findByIdWithItems(order.getId()).orElseThrow();
         assertThat(retrievedOrder.getOrderItems().get(0).getUnitPrice()).isEqualTo(10000L);
         assertThat(retrievedOrder.getOrderItems().get(0).getSubtotal()).isEqualTo(20000L); // 10000 * 2
         assertThat(retrievedOrder.getTotalAmount()).isEqualTo(20000L);

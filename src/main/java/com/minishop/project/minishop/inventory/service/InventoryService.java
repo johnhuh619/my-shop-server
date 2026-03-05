@@ -4,12 +4,16 @@ import com.minishop.project.minishop.common.exception.BusinessException;
 import com.minishop.project.minishop.common.exception.ErrorCode;
 import com.minishop.project.minishop.inventory.domain.Inventory;
 import com.minishop.project.minishop.inventory.repository.InventoryRepository;
+import com.minishop.project.minishop.inventory.domain.InventoryOperationLog;
+import com.minishop.project.minishop.inventory.domain.InventoryOperationLog.OperationType;
+import com.minishop.project.minishop.inventory.repository.InventoryOperationLogRepository;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -17,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
+    private final InventoryOperationLogRepository operationLogRepository;
 
     @Transactional
     public Inventory initializeInventory(Long productId) {
@@ -70,6 +75,42 @@ public class InventoryService {
 
         inventory.confirm(quantity);
         inventoryRepository.save(inventory);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void confirmForOrder(Long orderId, Long productId, Long quantity) {
+        validateQuantity(quantity);
+
+        if (operationLogRepository.existsByOrderIdAndProductIdAndOperationType(
+                orderId, productId, OperationType.CONFIRM)) {
+            return;
+        }
+
+        Inventory inventory = inventoryRepository.findByProductIdWithLock(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVENTORY_NOT_FOUND));
+
+        inventory.confirm(quantity);
+        inventoryRepository.save(inventory);
+        operationLogRepository.save(
+                InventoryOperationLog.create(orderId, productId, OperationType.CONFIRM, quantity));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void releaseForOrder(Long orderId, Long productId, Long quantity) {
+        validateQuantity(quantity);
+
+        if (operationLogRepository.existsByOrderIdAndProductIdAndOperationType(
+                orderId, productId, OperationType.RELEASE)) {
+            return;
+        }
+
+        Inventory inventory = inventoryRepository.findByProductIdWithLock(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVENTORY_NOT_FOUND));
+
+        inventory.release(quantity);
+        inventoryRepository.save(inventory);
+        operationLogRepository.save(
+                InventoryOperationLog.create(orderId, productId, OperationType.RELEASE, quantity));
     }
 
     @Transactional(readOnly = true)

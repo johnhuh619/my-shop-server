@@ -6,6 +6,7 @@ import com.minishop.project.minishop.inventory.service.InventoryService;
 import com.minishop.project.minishop.order.domain.Order;
 import com.minishop.project.minishop.order.domain.OrderStatus;
 import com.minishop.project.minishop.order.dto.OrderItemRequest;
+import com.minishop.project.minishop.order.repository.OrderRepository;
 import com.minishop.project.minishop.order.service.OrderService;
 import com.minishop.project.minishop.product.domain.Product;
 import com.minishop.project.minishop.product.domain.ProductStatus;
@@ -19,8 +20,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -33,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Transactional
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class AdminOrderControllerTest {
 
     @MockitoBean
@@ -56,6 +57,9 @@ class AdminOrderControllerTest {
 
     @Autowired
     private OrderService orderService;
+
+    @Autowired
+    private OrderRepository orderRepository;
 
     private Long customerUserId;
     private String adminAccessToken;
@@ -143,7 +147,8 @@ class AdminOrderControllerTest {
 
     private Order createPaidOrder(Long userId) {
         Order order = createCreatedOrder(userId);
-        return orderService.markAsPaid(order.getId());
+        orderService.markAsPaid(order.getId());
+        return orderRepository.findById(order.getId()).orElseThrow();
     }
 
     private Product createProduct(String name, Long unitPrice) {

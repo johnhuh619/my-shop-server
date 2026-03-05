@@ -25,6 +25,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductService productService;
     private final InventoryService inventoryService;
+    private final OrderStatusTransitioner orderStatusTransitioner;
 
     @Transactional
     public Order createOrder(Long userId, List<OrderItemRequest> itemRequests,
@@ -86,29 +87,26 @@ public class OrderService {
         return orderRepository.findByUserIdWithItems(userId);
     }
 
-    @Transactional
-    public Order markAsPaid(Long orderId) {
-        Order order = orderRepository.findByIdWithLock(orderId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+    public void markAsPaid(Long orderId) {
+        Order order = orderStatusTransitioner.markAsPaidStatus(orderId);
 
-        if (order.getStatus() == OrderStatus.PAID
-                || order.getStatus() == OrderStatus.COMPLETED
-                || order.getStatus() == OrderStatus.REFUND_REQUESTED
-                || order.getStatus() == OrderStatus.REFUNDED) {
-            return order;
-        }
+        if (order == null) {
+            order = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
-        if (order.getStatus() != OrderStatus.CREATED) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
-                    "Order can only be marked as paid when status is CREATED");
+            OrderStatus status = order.getStatus();
+            if (status != OrderStatus.PAID
+                    && status != OrderStatus.COMPLETED
+                    && status != OrderStatus.REFUND_REQUESTED
+                    && status != OrderStatus.REFUNDED) {
+                return;
+            }
         }
 
         order.getOrderItems().stream()
                 .sorted(Comparator.comparing(OrderItem::getProductId))
-                .forEach(item -> inventoryService.confirm(item.getProductId(), item.getQuantity()));
-
-        order.markAsPaid();
-        return orderRepository.save(order);
+                .forEach(item -> inventoryService.confirmForOrder(
+                        orderId, item.getProductId(), item.getQuantity()));
     }
 
     @Transactional
@@ -133,43 +131,46 @@ public class OrderService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
     }
 
-    @Transactional
     public void expireOrder(Long orderId) {
-        Order order = orderRepository.findByIdWithLock(orderId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+        Order order = orderStatusTransitioner.expireStatus(orderId);
 
-        if (order.getStatus() != OrderStatus.CREATED) {
-            return;
+        if (order == null) {
+            order = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+            if (order.getStatus() != OrderStatus.EXPIRED) {
+                return;
+            }
         }
 
         order.getOrderItems().stream()
                 .sorted(Comparator.comparing(OrderItem::getProductId))
-                .forEach(item -> inventoryService.release(item.getProductId(), item.getQuantity()));
-
-        order.expire();
-        orderRepository.save(order);
+                .forEach(item -> inventoryService.releaseForOrder(
+                        orderId, item.getProductId(), item.getQuantity()));
     }
 
     /**
      * Called by system flows after payment failure.
-     * Releases reserved inventory and cancels the order atomically.
+     * Releases reserved inventory and cancels the order.
      * Idempotent: skips if order is not in CREATED status.
+     * Transaction split: order status change + each inventory release run in separate transactions.
      */
-    @Transactional
     public void cancelOrderBySystem(Long orderId) {
-        Order order = orderRepository.findByIdWithLock(orderId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+        Order order = orderStatusTransitioner.cancelBySystemStatus(orderId);
 
-        if (order.getStatus() != OrderStatus.CREATED) {
-            return;
+        if (order == null) {
+            order = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+            if (order.getStatus() != OrderStatus.CANCELED) {
+                return;
+            }
         }
 
         order.getOrderItems().stream()
                 .sorted(Comparator.comparing(OrderItem::getProductId))
-                .forEach(item -> inventoryService.release(item.getProductId(), item.getQuantity()));
-
-        order.cancel();
-        orderRepository.save(order);
+                .forEach(item -> inventoryService.releaseForOrder(
+                        orderId, item.getProductId(), item.getQuantity()));
     }
 
     @Transactional
