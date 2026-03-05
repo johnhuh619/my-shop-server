@@ -119,11 +119,18 @@ CREATED → CANCELED
   - 조회용: **가능**
   - 비즈니스 로직 사용: **금지**
 
+### 환불 추적
+
+- OrderItem의 **환불 여부는 도메인 엔티티가 아닌 조회 DTO에서 합성**한다
+- 판정 기준: `Refund(COMPLETED)` 상태인 `RefundItem.orderItemId`
+- OrderItem 엔티티에 `refunded` 같은 상태 필드를 추가하지 않는다 (불변 원칙)
+
 ### 금지
 
 ```
 ❌ Product 가격을 다시 조회해 금액 계산
 ❌ OrderItem에서 Product 변경 로직 수행
+❌ OrderItem 엔티티에 환불 상태 필드 추가
 ```
 
 ---
@@ -169,24 +176,66 @@ REQUESTED → FAILED
 
 ---
 
-## 8. Event / Outbox Rules
+## 8. Delivery Domain Rules (배송 추적)
+
+### 규칙
+
+- Delivery는 **Order가 PAID 상태일 때만** 생성 가능
+- Delivery는 Order당 **최대 1개** (`orderId` UNIQUE)
+- Delivery는 Order 상태를 **직접 변경하지 않는다** (이벤트 기반)
+- 배송 주소는 **생성 시점 스냅샷** (이후 수정 불가)
+
+### 상태 전이
+
+```
+PREPARING → SHIPPED     (운송장번호 + 택배사 지정)
+SHIPPED   → IN_TRANSIT  (배송중)
+SHIPPED   → DELIVERED   (배송 완료, IN_TRANSIT 스킵 가능)
+IN_TRANSIT → DELIVERED  (배송 완료)
+PREPARING → CANCELED    (배송 전 취소)
+```
+
+### 이벤트
+
+- `DeliveryCompletedEvent`: 배송 완료 시 발행 → Order를 COMPLETED로 전이
+- 이벤트 리스너 실패 시 RetryTask에 등록
+
+### 금지
+
+```
+❌ Delivery에서 Order 상태 직접 변경
+❌ DELIVERED 상태에서 취소
+❌ 배송 주소 사후 수정
+❌ PAID가 아닌 Order에 대해 Delivery 생성
+```
+
+---
+
+## 9. Event / Outbox / RetryTask Rules
 
 ### 규칙
 
 - **DB가 Source of Truth**
 - Outbox는 **트랜잭션 내부에서만** 생성
 - Worker는 **중복 이벤트 처리 가능**해야 함
+- 이벤트 리스너 실패 시 **RetryTask에 등록** (DB에 재시도 상태 기록)
+- RetryTask 핸들러는 **taskType별 디스패치** (Handler 인터페이스)
+- 단일 스케줄러(RetryTaskScheduler)가 모든 재시도를 처리
+- **Exponential backoff**: 30초 × 2^retryCount
+- 최대 재시도 초과 시 `EXHAUSTED` 상태 (수동 개입 필요)
 
 ### 금지
 
 ```
 ❌ DB 없이 Redis 이벤트 발행
 ❌ 이벤트 1회 처리 가정
+❌ 이벤트 리스너에서 실패를 log.error()만으로 처리 (RetryTask 등록 필수)
+❌ 도메인별 개별 보상 스케줄러 생성 (RetryTask로 통합)
 ```
 
 ---
 
-## 9. AI / 개발자 공통 강제 규칙
+## 10. AI / 개발자 공통 강제 규칙
 
 | 상황 | 조치 |
 |------|------|

@@ -21,7 +21,8 @@
 | OrderItem | 주문 시점 상품 스냅샷 |
 | Payment | 금전 거래 (멱등성 적용) |
 | Refund | 금전의 역방향 흐름 |
-| Outbox | 이벤트 유실 방지용 브릿지 |
+| Delivery | 배송 추적 (결제 완료 후 물류 상태) |
+| Outbox | 이벤트 유실 방지 + 재시도 보상 (RetryTask) |
 
 ---
 
@@ -91,8 +92,18 @@ Outbox → Redis Stream → Worker
    - Payment → `COMPLETED`
    - Order → `PAID`
 
-6. **배송 요청 생성**
-   - 이벤트 기반
+6. **배송 생성** (Admin)
+   - Order가 `PAID`인 경우에만 생성 가능
+   - Delivery 상태: `PREPARING`
+
+7. **배송 발송** (Admin)
+   - 운송장번호 + 택배사 지정
+   - Delivery 상태: `PREPARING` → `SHIPPED`
+
+8. **배송 완료** (Admin)
+   - Delivery 상태: `SHIPPED` / `IN_TRANSIT` → `DELIVERED`
+   - DeliveryCompletedEvent 발행 (비동기)
+   - Order 상태: `PAID` → `COMPLETED`
 
 ---
 
@@ -123,8 +134,10 @@ Refund 생성
 | 중복 결제 요청 | Idempotency-Key |
 | Redis 장애 | Outbox 재처리 |
 | Worker 중복 처리 | 상태 기반 조건부 UPDATE |
-| 결제 실패 | Payment FAILED + 재시도 |
+| 결제 실패 | Payment FAILED + RetryTask 재시도 |
 | 주문 만료 | 스케줄러로 재고 롤백 |
+| 이벤트 리스너 실패 | RetryTask 등록 → 단일 스케줄러가 exponential backoff로 재시도 |
+| 재시도 소진 | RetryTask EXHAUSTED → 수동 개입 필요 |
 
 ---
 

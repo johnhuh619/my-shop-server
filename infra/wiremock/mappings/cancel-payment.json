@@ -1,0 +1,23 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/v1/payments/.*/cancel"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "paymentKey": "mocked-payment-key",
+      "orderId": "mocked-order-id",
+      "status": "CANCELED",
+      "totalAmount": 1000,
+      "balanceAmount": 0,
+      "cancelAmount": 1000,
+      "cancelReason": "mock-cancel",
+      "canceledAt": "2026-02-11T12:01:00Z"
+    }
+  }
+}
+

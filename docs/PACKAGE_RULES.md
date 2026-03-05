@@ -28,7 +28,8 @@ com.minishop.project.minishop
 ├── order         # 주문
 ├── payment       # 결제
 ├── refund        # 환불
-├── outbox        # 이벤트 브릿지
+├── delivery      # 배송 추적
+├── outbox        # 이벤트 브릿지 + RetryTask 보상
 └── common        # 공통 (exception, response, util)
 ```
 

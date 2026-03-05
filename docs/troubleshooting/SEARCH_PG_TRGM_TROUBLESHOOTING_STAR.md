@@ -142,3 +142,27 @@ Page<Product> findByStatusAndNameContainingIgnoreCase(
 1. 검색 성능 테스트 스크립트(k6/JMeter) 추가로 p95/p99 관리
 2. `keyword` 길이에 따른 검색 정책(최소 글자 수, prefix fallback) 명문화
 3. 운영 관측 지표에 검색 응답시간/슬로우쿼리 알림 연결
+
+---
+
+## 운영 관점 결론
+1. 운영 환경에서는 애플리케이션 런타임 DDL을 지양한다.
+2. `pg_trgm` 확장/인덱스는 Flyway/Liquibase 또는 DBA 수동 SQL로 선반영한다.
+3. 앱 계정은 DDL 권한 없이 읽기/쓰기 중심 권한만 부여한다.
+4. 현재 `PostgresTrigramIndexInitializer`는 개발 편의용 임시 코드이며, 운영 마이그레이션 전환 후 제거한다.
+
+---
+
+## 현재 상태 업데이트 (2026-02-17)
+
+### 반영 완료
+1. 검색 Repository 쿼리를 `lower(name) LIKE '%keyword%'` 형태로 명시화했다.
+2. `PostgresTrigramIndexInitializer`에 개발 편의용 임시 코드 주석을 추가했다.
+3. `PostgresTrigramIndexInitializer`는 `default/dev/docker` 프로필에서만 동작하도록 제한했다.
+4. Docker 기준 DB 드라이버를 PostgreSQL로 정리했다.
+
+### 아직 남은 작업 (운영 전환)
+1. Flyway 또는 Liquibase 도입 후 `pg_trgm` 확장/인덱스를 마이그레이션 SQL로 이관
+2. 운영 프로필의 `spring.jpa.hibernate.ddl-auto`를 `validate` 또는 `none`으로 전환
+3. `PostgresTrigramIndexInitializer` 제거
+4. MySQL 기준으로 남아있는 문서(`docs/LOAD_TEST.md`)를 PostgreSQL 기준으로 정합성 수정
