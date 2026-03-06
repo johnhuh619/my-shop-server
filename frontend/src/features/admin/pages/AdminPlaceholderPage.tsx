@@ -2,7 +2,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { adminApi } from '@/features/admin/api/adminApi'
-import type { DeliveryResponse, DeliveryStatus, RefundStatus } from '@/shared/types/domain'
+import { productApi } from '@/features/product/api/productApi'
+import type { DeliveryResponse, DeliveryStatus, ProductResponse, RefundStatus } from '@/shared/types/domain'
 import { ErrorView } from '@/shared/ui/ErrorView'
 import { LoadingView } from '@/shared/ui/LoadingView'
 import { StatusChip } from '@/shared/ui/StatusChip'
@@ -154,19 +155,44 @@ export const AdminPlaceholderPage = () => {
   const [createDeliveryZipCode, setCreateDeliveryZipCode] = useState('')
 
   const [completeOrderIdInput, setCompleteOrderIdInput] = useState('')
-  const [inventoryProductIdInput, setInventoryProductIdInput] = useState('')
+  const [productSearchInput, setProductSearchInput] = useState('')
+  const [productSearchKeyword, setProductSearchKeyword] = useState('')
+  const [productSearchPage, setProductSearchPage] = useState(0)
+  const [selectedProductId, setSelectedProductId] = useState('')
+  const [selectedProductSnapshot, setSelectedProductSnapshot] = useState<ProductResponse | null>(null)
   const [addStockQuantityInput, setAddStockQuantityInput] = useState('')
+  const [editProductNameInput, setEditProductNameInput] = useState('')
+  const [editProductDescriptionInput, setEditProductDescriptionInput] = useState('')
+  const [editProductUnitPriceInput, setEditProductUnitPriceInput] = useState('')
   const [productNameInput, setProductNameInput] = useState('')
   const [productDescriptionInput, setProductDescriptionInput] = useState('')
   const [productUnitPriceInput, setProductUnitPriceInput] = useState('')
 
-  const inventoryProductId = Number(inventoryProductIdInput)
-  const canLookupInventory = Number.isFinite(inventoryProductId) && inventoryProductId > 0
+  const operationProductsQuery = useQuery({
+    queryKey: ['admin', 'products', productSearchKeyword, productSearchPage],
+    queryFn: () => productApi.getProducts({ page: productSearchPage, size: 6, keyword: productSearchKeyword || undefined }),
+    enabled: activePanel === 'operations',
+  })
+
+  const operationProductPage = operationProductsQuery.data
+  const operationProducts = operationProductPage?.content ?? []
+  const selectedProduct =
+    operationProducts.find((product) => String(product.id) === selectedProductId) ??
+    (selectedProductSnapshot && String(selectedProductSnapshot.id) === selectedProductId ? selectedProductSnapshot : null)
+  const canLookupInventory = !!selectedProduct
+
+  const selectProduct = (product: ProductResponse) => {
+    setSelectedProductId(String(product.id))
+    setSelectedProductSnapshot(product)
+    setEditProductNameInput(product.name)
+    setEditProductDescriptionInput(product.description)
+    setEditProductUnitPriceInput(String(product.unitPrice))
+  }
 
   const inventoryQuery = useQuery({
-    queryKey: ['admin', 'inventory', inventoryProductId],
-    queryFn: () => adminApi.getInventory(inventoryProductId),
-    enabled: canLookupInventory,
+    queryKey: ['admin', 'inventory', selectedProduct?.id],
+    queryFn: () => adminApi.getInventory(selectedProduct!.id),
+    enabled: activePanel === 'operations' && canLookupInventory,
   })
 
   const adminRefundsQuery = useQuery({
@@ -312,17 +338,64 @@ export const AdminPlaceholderPage = () => {
 
   const addStockMutation = useMutation({
     mutationFn: () => {
-      const productId = Number(inventoryProductIdInput)
       const quantity = Number(addStockQuantityInput)
-      if (!Number.isFinite(productId) || !Number.isFinite(quantity) || quantity <= 0) {
-        throw new Error('재고 입력값을 확인해주세요.')
+      if (!selectedProduct || !Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error('???? ??????.')
       }
-      return adminApi.addStock(productId, { quantity })
+      return adminApi.addStock(selectedProduct.id, { quantity })
     },
-    onSuccess: async () => {
+    onSuccess: async (inventory) => {
+      setAddStockQuantityInput('')
+      if (selectedProduct) {
+        setSelectedProductSnapshot({
+          ...selectedProduct,
+          quantityAvailable: inventory.quantityAvailable,
+        })
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['admin', 'inventory'] }),
         queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
+      ])
+    },
+  })
+
+  const updateProductMutation = useMutation({
+    mutationFn: () => {
+      const unitPrice = Number(editProductUnitPriceInput)
+      if (!selectedProduct || !editProductNameInput || !editProductDescriptionInput || !Number.isFinite(unitPrice) || unitPrice <= 0) {
+        throw new Error('?? ??? ??????.')
+      }
+      return adminApi.updateProduct(selectedProduct.id, {
+        name: editProductNameInput,
+        description: editProductDescriptionInput,
+        unitPrice,
+      })
+    },
+    onSuccess: async (product) => {
+      setSelectedProductSnapshot(product)
+      setEditProductNameInput(product.name)
+      setEditProductDescriptionInput(product.description)
+      setEditProductUnitPriceInput(String(product.unitPrice))
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
+      ])
+    },
+  })
+
+  const deactivateProductMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedProduct) {
+        throw new Error('???? ???? ??????.')
+      }
+      return adminApi.deactivateProduct(selectedProduct.id)
+    },
+    onSuccess: async (product) => {
+      setSelectedProductSnapshot(product)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
       ])
     },
   })
@@ -331,7 +404,7 @@ export const AdminPlaceholderPage = () => {
     mutationFn: () => {
       const unitPrice = Number(productUnitPriceInput)
       if (!productNameInput || !productDescriptionInput || !Number.isFinite(unitPrice) || unitPrice <= 0) {
-        throw new Error('상품 입력값을 확인해주세요.')
+        throw new Error('???? ??????.')
       }
       return adminApi.createProduct({
         name: productNameInput,
@@ -339,8 +412,15 @@ export const AdminPlaceholderPage = () => {
         unitPrice,
       })
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['products'] })
+    onSuccess: async (product) => {
+      setProductNameInput('')
+      setProductDescriptionInput('')
+      setProductUnitPriceInput('')
+      selectProduct(product)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
+      ])
     },
   })
 
@@ -924,129 +1004,183 @@ export const AdminPlaceholderPage = () => {
         <VStack gap="x2" align="flex-start">
           <Text textStyle="t6Bold">주문 상태 보정</Text>
           <Text textStyle="t3Regular" color="fg.neutralSubtle">
-            결제/배송 후속 처리 완료 시 주문 상태를 완료로 전환합니다.
+            결제 및 배송 후속 처리가 확인된 주문을 완료 상태로 전환합니다.
           </Text>
           <div className="w-full rounded-r2 border border-stroke-warning-weak bg-bg-warning-weak px-3 py-2">
             <Text textStyle="t3Regular" color="fg.warning">
-              주문 완료 처리는 고객 주문 화면에 즉시 반영됩니다.
+              이 작업은 고객 주문 화면에 즉시 반영됩니다.
             </Text>
           </div>
           <label className="flex w-full flex-col gap-1">
-            <span className="text-sm text-fg-neutral-subtle">orderId</span>
-            <input
-              className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-              type="number"
-              inputMode="numeric"
-              value={completeOrderIdInput}
-              onChange={(event) => setCompleteOrderIdInput(event.target.value)}
-            />
+            <span className="text-sm text-fg-neutral-subtle">주문 ID</span>
+            <input className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2" type="number" inputMode="numeric" value={completeOrderIdInput} onChange={(event) => setCompleteOrderIdInput(event.target.value)} placeholder="예: 10024" />
           </label>
-          <ActionButton loading={completeOrderMutation.isPending} disabled={completeOrderMutation.isPending} onClick={() => completeOrderMutation.mutate()}>
-            주문 완료 처리
-          </ActionButton>
+          <ActionButton loading={completeOrderMutation.isPending} disabled={completeOrderMutation.isPending} onClick={() => completeOrderMutation.mutate()}>주문 완료 처리</ActionButton>
         </VStack>
       </section>
 
-      <div className="grid gap-3 xl:grid-cols-2">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] xl:items-start">
         <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
-          <VStack gap="x2" align="flex-start">
-            <Text textStyle="t6Bold">재고 관리</Text>
-            <Text textStyle="t3Regular" color="fg.neutralSubtle">
-              조회 후 즉시 수량 보정을 적용합니다.
-            </Text>
+          <VStack gap="x3" align="flex-start">
+            <VStack gap="x1" align="flex-start">
+              <Text textStyle="t6Bold">상품 찾기</Text>
+              <Text textStyle="t3Regular" color="fg.neutralSubtle">검색 결과는 짧은 목록으로 유지하고, 실제 작업은 오른쪽 고정 패널에서 처리합니다.</Text>
+            </VStack>
 
             <label className="flex w-full flex-col gap-1">
-              <span className="text-sm text-fg-neutral-subtle">productId</span>
-              <input
-                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                type="number"
-                inputMode="numeric"
-                value={inventoryProductIdInput}
-                onChange={(event) => setInventoryProductIdInput(event.target.value)}
-              />
+              <span className="text-sm text-fg-neutral-subtle">검색어</span>
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
+                <input
+                  className="min-w-0 flex-1 rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
+                  value={productSearchInput}
+                  onChange={(event) => setProductSearchInput(event.target.value)}
+                  placeholder="상품명, 키워드"
+                />
+                <ActionButton
+                  variant="neutralWeak"
+                  size="small"
+                  onClick={() => {
+                    setProductSearchPage(0)
+                    setProductSearchKeyword(productSearchInput.trim())
+                  }}
+                >
+                  검색
+                </ActionButton>
+              </div>
             </label>
 
-            <ActionButton variant="neutralWeak" size="xsmall" disabled={!canLookupInventory} onClick={() => void inventoryQuery.refetch()}>
-              재고 조회
-            </ActionButton>
+            <div className="flex w-full items-center justify-between gap-2 rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-3 py-2">
+              <Text textStyle="t3Regular" color="fg.neutralSubtle">총 {operationProductPage?.totalElements ?? 0}개, 페이지 {operationProductPage ? operationProductPage.page + 1 : 1}</Text>
+              <HStack gap="x2">
+                <ActionButton variant="neutralWeak" size="xsmall" disabled={!operationProductPage || operationProductPage.page === 0} onClick={() => setProductSearchPage((prev) => Math.max(prev - 1, 0))}>이전</ActionButton>
+                <ActionButton variant="neutralWeak" size="xsmall" disabled={!operationProductPage?.hasNext} onClick={() => setProductSearchPage((prev) => prev + 1)}>다음</ActionButton>
+              </HStack>
+            </div>
 
-            {inventoryQuery.isLoading ? <Text textStyle="t3Regular">재고 정보를 조회 중...</Text> : null}
-            {inventoryQuery.isError ? (
-              <Text textStyle="t3Regular" color="fg.critical">
-                {getErrorMessage(inventoryQuery.error)}
-              </Text>
+            {operationProductsQuery.isLoading ? <Text textStyle="t3Regular">상품 목록을 불러오는 중...</Text> : null}
+            {operationProductsQuery.isError ? <Text textStyle="t3Regular" color="fg.critical">{getErrorMessage(operationProductsQuery.error)}</Text> : null}
+
+            {!operationProductsQuery.isLoading && operationProducts.length === 0 ? (
+              <div className="w-full rounded-r2 border border-dashed border-stroke-neutral-weak bg-bg-layer-floating px-4 py-5">
+                <Text textStyle="t3Regular" color="fg.neutralSubtle">조건에 맞는 상품이 없습니다.</Text>
+              </div>
             ) : null}
 
-            {inventoryQuery.data ? (
-              <VStack gap="x1" align="flex-start" className="w-full rounded-r2 bg-bg-layer-floating px-3 py-3">
-                <Text textStyle="t4Regular">available: {inventoryQuery.data.quantityAvailable}</Text>
-                <Text textStyle="t4Regular">reserved: {inventoryQuery.data.quantityReserved}</Text>
-                <Text textStyle="t4Regular" color="fg.neutralSubtle">
-                  updated: {formatDateTime(inventoryQuery.data.updatedAt)}
-                </Text>
-              </VStack>
+            {operationProducts.length > 0 ? (
+              <div className="max-h-[520px] w-full overflow-y-auto rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating p-2">
+                <VStack gap="x2" align="stretch">
+                  {operationProducts.map((product) => {
+                    const isSelected = String(product.id) === selectedProductId
+                    return (
+                      <button key={product.id} type="button" className={`rounded-r2 border px-4 py-3 text-left transition-colors ${isSelected ? 'border-stroke-brand-solid bg-bg-brand-weak' : 'border-stroke-neutral-subtle bg-bg-layer-default hover:border-stroke-neutral-solid'}`} onClick={() => selectProduct(product)}>
+                        <VStack gap="x1" align="flex-start">
+                          <HStack justify="space-between" align="center" className="w-full gap-2">
+                            <Text textStyle="t5Bold" className="truncate">{product.name}</Text>
+                            <span className="rounded-r2 bg-bg-neutral-weak px-2 py-1 text-xs font-semibold text-fg-neutral-subtle">#{product.id}</span>
+                          </HStack>
+                          <Text textStyle="t3Regular" color="fg.neutralSubtle">{formatCurrency(product.unitPrice)} · 상태 {product.status}</Text>
+                          <Text textStyle="t3Regular" color="fg.neutralSubtle">가용 재고 {product.quantityAvailable ?? '확인 필요'}</Text>
+                        </VStack>
+                      </button>
+                    )
+                  })}
+                </VStack>
+              </div>
             ) : null}
-
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm text-fg-neutral-subtle">add quantity</span>
-              <input
-                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                type="number"
-                inputMode="numeric"
-                value={addStockQuantityInput}
-                onChange={(event) => setAddStockQuantityInput(event.target.value)}
-              />
-            </label>
-
-            <ActionButton loading={addStockMutation.isPending} disabled={addStockMutation.isPending} onClick={() => addStockMutation.mutate()}>
-              재고 추가
-            </ActionButton>
           </VStack>
         </section>
 
-        <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
-          <VStack gap="x2" align="flex-start">
-            <Text textStyle="t6Bold">상품 등록</Text>
-            <Text textStyle="t3Regular" color="fg.neutralSubtle">
-              필수 정보 입력 후 판매 상품을 등록합니다.
-            </Text>
+        <VStack gap="x3" className="xl:sticky xl:top-4">
+          <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
+            <VStack gap="x3" align="flex-start">
+              <Text textStyle="t6Bold">선택 상품 작업</Text>
+              <Text textStyle="t3Regular" color="fg.neutralSubtle">선택한 상품의 재고 보정과 상품 정보 수정을 이 패널에서 처리합니다.</Text>
 
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm text-fg-neutral-subtle">name</span>
-              <input
-                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                value={productNameInput}
-                onChange={(event) => setProductNameInput(event.target.value)}
-              />
-            </label>
+              {selectedProduct ? (
+                <div className="w-full rounded-r2 border border-stroke-brand-solid bg-bg-brand-weak px-4 py-3">
+                  <VStack gap="x1" align="flex-start">
+                    <Text textStyle="t5Bold">{selectedProduct.name}</Text>
+                    <Text textStyle="t3Regular" color="fg.neutralSubtle">ID {selectedProduct.id} | {formatCurrency(selectedProduct.unitPrice)} · 상태 {selectedProduct.status}</Text>
+                  </VStack>
+                </div>
+              ) : (
+                <div className="w-full rounded-r2 border border-dashed border-stroke-neutral-weak bg-bg-layer-floating px-4 py-5">
+                  <Text textStyle="t3Regular" color="fg.neutralSubtle">왼쪽 목록에서 상품을 선택하면 여기에서 작업할 수 있습니다.</Text>
+                </div>
+              )}
 
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm text-fg-neutral-subtle">description</span>
-              <input
-                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                value={productDescriptionInput}
-                onChange={(event) => setProductDescriptionInput(event.target.value)}
-              />
-            </label>
+              {inventoryQuery.isLoading ? <Text textStyle="t3Regular">재고 정보를 불러오는 중...</Text> : null}
+              {inventoryQuery.isError ? <Text textStyle="t3Regular" color="fg.critical">{getErrorMessage(inventoryQuery.error)}</Text> : null}
 
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm text-fg-neutral-subtle">unitPrice</span>
-              <input
-                className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2"
-                type="number"
-                value={productUnitPriceInput}
-                onChange={(event) => setProductUnitPriceInput(event.target.value)}
-              />
-            </label>
+              {inventoryQuery.data ? (
+                <div className="grid w-full gap-2 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="rounded-r2 bg-bg-layer-floating px-3 py-3">
+                    <Text textStyle="t3Regular" color="fg.neutralSubtle">가용 재고</Text>
+                    <Text textStyle="t5Bold">{inventoryQuery.data.quantityAvailable}</Text>
+                  </div>
+                  <div className="rounded-r2 bg-bg-layer-floating px-3 py-3">
+                    <Text textStyle="t3Regular" color="fg.neutralSubtle">예약 재고</Text>
+                    <Text textStyle="t5Bold">{inventoryQuery.data.quantityReserved}</Text>
+                  </div>
+                  <div className="rounded-r2 bg-bg-layer-floating px-3 py-3">
+                    <Text textStyle="t3Regular" color="fg.neutralSubtle">최근 갱신</Text>
+                    <Text textStyle="t4Regular">{formatDateTime(inventoryQuery.data.updatedAt)}</Text>
+                  </div>
+                </div>
+              ) : null}
 
-            <ActionButton loading={createProductMutation.isPending} disabled={createProductMutation.isPending} onClick={() => createProductMutation.mutate()}>
-              상품 등록
-            </ActionButton>
-          </VStack>
-        </section>
+              <label className="flex w-full flex-col gap-1">
+                <span className="text-sm text-fg-neutral-subtle">추가 입고 수량</span>
+                <input className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2" type="number" inputMode="numeric" value={addStockQuantityInput} onChange={(event) => setAddStockQuantityInput(event.target.value)} placeholder="예: 20" disabled={!selectedProduct} />
+              </label>
+              <ActionButton loading={addStockMutation.isPending} disabled={addStockMutation.isPending || !selectedProduct} onClick={() => addStockMutation.mutate()}>재고 추가</ActionButton>
+
+              <div className="h-px w-full bg-stroke-neutral-muted" />
+
+              <label className="flex w-full flex-col gap-1">
+                <span className="text-sm text-fg-neutral-subtle">상품명</span>
+                <input className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2" value={editProductNameInput} onChange={(event) => setEditProductNameInput(event.target.value)} placeholder="상품명을 입력하세요" disabled={!selectedProduct} />
+              </label>
+              <label className="flex w-full flex-col gap-1">
+                <span className="text-sm text-fg-neutral-subtle">상품 설명</span>
+                <input className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2" value={editProductDescriptionInput} onChange={(event) => setEditProductDescriptionInput(event.target.value)} placeholder="상품 설명을 입력하세요" disabled={!selectedProduct} />
+              </label>
+              <label className="flex w-full flex-col gap-1">
+                <span className="text-sm text-fg-neutral-subtle">판매가</span>
+                <input className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2" type="number" inputMode="numeric" value={editProductUnitPriceInput} onChange={(event) => setEditProductUnitPriceInput(event.target.value)} placeholder="예: 19900" disabled={!selectedProduct} />
+              </label>
+
+              <HStack gap="x2" className="w-full flex-wrap">
+                <ActionButton loading={updateProductMutation.isPending} disabled={updateProductMutation.isPending || !selectedProduct} onClick={() => updateProductMutation.mutate()}>상품 수정</ActionButton>
+                <ActionButton variant="criticalSolid" loading={deactivateProductMutation.isPending} disabled={deactivateProductMutation.isPending || !selectedProduct || selectedProduct.status !== 'ACTIVE'} onClick={() => { if (!selectedProduct || !window.confirm(`'${selectedProduct.name}' 상품을 비활성화하시겠습니까?`)) { return } deactivateProductMutation.mutate() }}>상품 비활성화</ActionButton>
+              </HStack>
+            </VStack>
+          </section>
+
+          <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
+            <VStack gap="x3" align="flex-start">
+              <Text textStyle="t6Bold">상품 등록</Text>
+              <Text textStyle="t3Regular" color="fg.neutralSubtle">신규 상품을 등록한 뒤 바로 위 패널에서 재고를 보정할 수 있습니다.</Text>
+              <label className="flex w-full flex-col gap-1">
+                <span className="text-sm text-fg-neutral-subtle">상품명</span>
+                <input className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2" value={productNameInput} onChange={(event) => setProductNameInput(event.target.value)} placeholder="예: 스테인리스 텀블러" />
+              </label>
+              <label className="flex w-full flex-col gap-1">
+                <span className="text-sm text-fg-neutral-subtle">상품 설명</span>
+                <input className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2" value={productDescriptionInput} onChange={(event) => setProductDescriptionInput(event.target.value)} placeholder="핵심 판매 포인트를 입력하세요" />
+              </label>
+              <label className="flex w-full flex-col gap-1">
+                <span className="text-sm text-fg-neutral-subtle">판매가</span>
+                <input className="rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-x3 py-x2" type="number" inputMode="numeric" value={productUnitPriceInput} onChange={(event) => setProductUnitPriceInput(event.target.value)} placeholder="예: 25900" />
+              </label>
+              <ActionButton loading={createProductMutation.isPending} disabled={createProductMutation.isPending} onClick={() => createProductMutation.mutate()}>상품 등록</ActionButton>
+            </VStack>
+          </section>
+        </VStack>
       </div>
     </VStack>
   )
+
 
   return (
     <VStack gap="x5" className="w-full">
@@ -1054,7 +1188,7 @@ export const AdminPlaceholderPage = () => {
         <VStack gap="x2" align="flex-start">
           <Text textStyle="t7Bold">관리자 운영 센터</Text>
           <Text textStyle="t4Regular" color="fg.neutralSubtle">
-            환불, 배송, 운영 액션을 업무 흐름 기준으로 분리해 빠르게 처리할 수 있도록 구성했습니다.
+            환불, 배송, 주문 상태와 운영 작업을 한 화면에서 확인하고 처리할 수 있습니다.
           </Text>
 
           <div className="mt-2 grid w-full gap-2 md:grid-cols-3">
