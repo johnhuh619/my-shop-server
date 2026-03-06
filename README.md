@@ -37,6 +37,8 @@
 
 ## 아키텍처 개요
 
+![architecture](docs/architecture.png)
+
 ```
 [Client]
    │
