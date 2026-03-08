@@ -2,7 +2,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { adminApi } from '@/features/admin/api/adminApi'
-import { productApi } from '@/features/product/api/productApi'
 import type { DeliveryResponse, DeliveryStatus, ProductResponse, RefundStatus } from '@/shared/types/domain'
 import { ErrorView } from '@/shared/ui/ErrorView'
 import { LoadingView } from '@/shared/ui/LoadingView'
@@ -14,6 +13,7 @@ import { formatCurrency } from '@/shared/utils/format'
 type AdminPanel = 'refunds' | 'deliveries' | 'operations'
 type RefundFilter = 'ALL' | RefundStatus
 type DeliveryFilter = 'ACTION_REQUIRED' | 'ALL' | DeliveryStatus
+type ProductStatusFilter = 'ACTIVE' | 'INACTIVE' | 'ALL'
 
 const panelTabs: { key: AdminPanel; title: string; description: string }[] = [
   {
@@ -50,6 +50,12 @@ const deliveryFilters: { key: DeliveryFilter; label: string }[] = [
   { key: 'IN_TRANSIT', label: '배송중' },
   { key: 'DELIVERED', label: '완료' },
   { key: 'CANCELED', label: '취소' },
+]
+
+const productStatusFilters: { key: ProductStatusFilter; label: string }[] = [
+  { key: 'ACTIVE', label: '활성' },
+  { key: 'INACTIVE', label: '비활성' },
+  { key: 'ALL', label: '전체' },
 ]
 
 const refundStatusPriority: Record<RefundStatus, number> = {
@@ -157,6 +163,7 @@ export const AdminPlaceholderPage = () => {
   const [completeOrderIdInput, setCompleteOrderIdInput] = useState('')
   const [productSearchInput, setProductSearchInput] = useState('')
   const [productSearchKeyword, setProductSearchKeyword] = useState('')
+  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>('ACTIVE')
   const [productSearchPage, setProductSearchPage] = useState(0)
   const [selectedProductId, setSelectedProductId] = useState('')
   const [selectedProductSnapshot, setSelectedProductSnapshot] = useState<ProductResponse | null>(null)
@@ -169,8 +176,14 @@ export const AdminPlaceholderPage = () => {
   const [productUnitPriceInput, setProductUnitPriceInput] = useState('')
 
   const operationProductsQuery = useQuery({
-    queryKey: ['admin', 'products', productSearchKeyword, productSearchPage],
-    queryFn: () => productApi.getProducts({ page: productSearchPage, size: 6, keyword: productSearchKeyword || undefined }),
+    queryKey: ['admin', 'products', productSearchKeyword, productStatusFilter, productSearchPage],
+    queryFn: () =>
+      adminApi.getProducts({
+        page: productSearchPage,
+        size: 6,
+        keyword: productSearchKeyword || undefined,
+        status: productStatusFilter,
+      }),
     enabled: activePanel === 'operations',
   })
 
@@ -400,6 +413,22 @@ export const AdminPlaceholderPage = () => {
     },
   })
 
+  const activateProductMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedProduct) {
+        throw new Error('활성화할 상품을 선택해주세요.')
+      }
+      return adminApi.activateProduct(selectedProduct.id)
+    },
+    onSuccess: async (product) => {
+      setSelectedProductSnapshot(product)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
+      ])
+    },
+  })
+
   const createProductMutation = useMutation({
     mutationFn: () => {
       const unitPrice = Number(productUnitPriceInput)
@@ -435,12 +464,18 @@ export const AdminPlaceholderPage = () => {
       cancelDeliveryMutation.error,
       completeOrderMutation.error,
       addStockMutation.error,
+      updateProductMutation.error,
+      deactivateProductMutation.error,
+      activateProductMutation.error,
       createProductMutation.error,
     ]
     const latest = candidates.find((error) => !!error)
     return latest ? getErrorMessage(latest) : null
   }, [
     addStockMutation.error,
+    updateProductMutation.error,
+    deactivateProductMutation.error,
+    activateProductMutation.error,
     approveRefundMutation.error,
     cancelDeliveryMutation.error,
     completeOrderMutation.error,
@@ -1049,8 +1084,29 @@ export const AdminPlaceholderPage = () => {
               </div>
             </label>
 
+            <VStack gap="x1" align="flex-start" className="w-full">
+              <Text textStyle="t3Regular" color="fg.neutralSubtle">상태 필터</Text>
+              <HStack gap="x2" className="w-full flex-wrap">
+                {productStatusFilters.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    className={getChipButtonClass(productStatusFilter === filter.key)}
+                    onClick={() => {
+                      setProductStatusFilter(filter.key)
+                      setProductSearchPage(0)
+                      setSelectedProductId('')
+                      setSelectedProductSnapshot(null)
+                    }}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </HStack>
+            </VStack>
+
             <div className="flex w-full items-center justify-between gap-2 rounded-r2 border border-stroke-neutral-subtle bg-bg-layer-floating px-3 py-2">
-              <Text textStyle="t3Regular" color="fg.neutralSubtle">총 {operationProductPage?.totalElements ?? 0}개, 페이지 {operationProductPage ? operationProductPage.page + 1 : 1}</Text>
+              <Text textStyle="t3Regular" color="fg.neutralSubtle">총 {operationProductPage?.totalElements ?? 0}개, 페이지 {operationProductPage ? operationProductPage.page + 1 : 1} · 필터 {productStatusFilter}</Text>
               <HStack gap="x2">
                 <ActionButton variant="neutralWeak" size="xsmall" disabled={!operationProductPage || operationProductPage.page === 0} onClick={() => setProductSearchPage((prev) => Math.max(prev - 1, 0))}>이전</ActionButton>
                 <ActionButton variant="neutralWeak" size="xsmall" disabled={!operationProductPage?.hasNext} onClick={() => setProductSearchPage((prev) => prev + 1)}>다음</ActionButton>
@@ -1094,7 +1150,7 @@ export const AdminPlaceholderPage = () => {
           <section className="rounded-r2 border border-stroke-neutral-muted bg-bg-layer-default p-4">
             <VStack gap="x3" align="flex-start">
               <Text textStyle="t6Bold">선택 상품 작업</Text>
-              <Text textStyle="t3Regular" color="fg.neutralSubtle">선택한 상품의 재고 보정과 상품 정보 수정을 이 패널에서 처리합니다.</Text>
+              <Text textStyle="t3Regular" color="fg.neutralSubtle">선택한 상품의 재고 보정, 상품 정보 수정, 상태 전환을 이 패널에서 처리합니다.</Text>
 
               {selectedProduct ? (
                 <div className="w-full rounded-r2 border border-stroke-brand-solid bg-bg-brand-weak px-4 py-3">
@@ -1152,7 +1208,11 @@ export const AdminPlaceholderPage = () => {
 
               <HStack gap="x2" className="w-full flex-wrap">
                 <ActionButton loading={updateProductMutation.isPending} disabled={updateProductMutation.isPending || !selectedProduct} onClick={() => updateProductMutation.mutate()}>상품 수정</ActionButton>
-                <ActionButton variant="criticalSolid" loading={deactivateProductMutation.isPending} disabled={deactivateProductMutation.isPending || !selectedProduct || selectedProduct.status !== 'ACTIVE'} onClick={() => { if (!selectedProduct || !window.confirm(`'${selectedProduct.name}' 상품을 비활성화하시겠습니까?`)) { return } deactivateProductMutation.mutate() }}>상품 비활성화</ActionButton>
+                {selectedProduct?.status === 'INACTIVE' ? (
+                  <ActionButton variant="brandSolid" loading={activateProductMutation.isPending} disabled={activateProductMutation.isPending || !selectedProduct} onClick={() => { if (!selectedProduct || !window.confirm(`'${selectedProduct.name}' 상품을 다시 활성화하시겠습니까?`)) { return } activateProductMutation.mutate() }}>상품 활성화</ActionButton>
+                ) : (
+                  <ActionButton variant="criticalSolid" loading={deactivateProductMutation.isPending} disabled={deactivateProductMutation.isPending || !selectedProduct || selectedProduct.status !== 'ACTIVE'} onClick={() => { if (!selectedProduct || !window.confirm(`'${selectedProduct.name}' 상품을 비활성화하시겠습니까?`)) { return } deactivateProductMutation.mutate() }}>상품 비활성화</ActionButton>
+                )}
               </HStack>
             </VStack>
           </section>

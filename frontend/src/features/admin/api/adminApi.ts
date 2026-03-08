@@ -1,6 +1,6 @@
 ﻿import { httpClient } from '@/shared/api/httpClient'
 import { unwrapApiResponse } from '@/shared/api/unwrapApiResponse'
-import type { ApiResponse } from '@/shared/types/api'
+import type { ApiResponse, PageResponse } from '@/shared/types/api'
 import type { DeliveryResponse, ProductResponse, RefundResponse, RefundStatus } from '@/shared/types/domain'
 
 export interface AdminInventoryResponse {
@@ -46,6 +46,13 @@ export interface AdminShipDeliveryRequest {
   trackingNumber: string
 }
 
+export interface AdminProductListParams {
+  page?: number
+  size?: number
+  keyword?: string
+  status?: 'ACTIVE' | 'INACTIVE' | 'ALL'
+}
+
 export const adminApi = {
   createProduct: async (payload: AdminProductCreateRequest) => {
     const { data } = await httpClient.post<ApiResponse<ProductResponse>>('/api/admin/products', payload)
@@ -59,6 +66,18 @@ export const adminApi = {
 
   deactivateProduct: async (productId: number) => {
     const { data } = await httpClient.post<ApiResponse<ProductResponse>>(`/api/admin/products/${productId}/deactivate`)
+    return unwrapApiResponse(data)
+  },
+
+  activateProduct: async (productId: number) => {
+    const { data } = await httpClient.post<ApiResponse<ProductResponse>>(`/api/admin/products/${productId}/activate`)
+    return unwrapApiResponse(data)
+  },
+
+  getProducts: async (params: AdminProductListParams) => {
+    const { data } = await httpClient.get<ApiResponse<PageResponse<ProductResponse>>>('/api/admin/products', {
+      params,
+    })
     return unwrapApiResponse(data)
   },
 
