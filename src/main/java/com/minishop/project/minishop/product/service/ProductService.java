@@ -56,13 +56,30 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Page<ProductWithStock> getActiveProductsWithStock(String keyword, Pageable pageable) {
-        Page<Product> productPage = (keyword != null && !keyword.isBlank())
-                ? productRepository.findByStatusAndNameContainingIgnoreCase(ProductStatus.ACTIVE, keyword.trim(), pageable)
-                : productRepository.findByStatus(ProductStatus.ACTIVE, pageable);
+        return getProductsWithStock(ProductStatus.ACTIVE, keyword, pageable);
+    }
 
+    @Transactional(readOnly = true)
+    public Page<ProductWithStock> getInactiveProductsWithStock(String keyword, Pageable pageable) {
+        return getProductsWithStock(ProductStatus.INACTIVE, keyword, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ProductWithStock> getProductsWithStock(String keyword, Pageable pageable) {
+        Page<Product> productPage = (keyword != null && !keyword.isBlank())
+                ? productRepository.findByNameContainingIgnoreCase(keyword.trim(), pageable)
+                : productRepository.findAll(pageable);
         Map<Long, Long> stockMap = inventoryService.getAvailableQuantities(
                 productPage.getContent().stream().map(Product::getId).toList());
+        return productPage.map(p -> new ProductWithStock(p, stockMap.getOrDefault(p.getId(), 0L)));
+    }
 
+    private Page<ProductWithStock> getProductsWithStock(ProductStatus status, String keyword, Pageable pageable) {
+        Page<Product> productPage = (keyword != null && !keyword.isBlank())
+                ? productRepository.findByStatusAndNameContainingIgnoreCase(status, keyword.trim(), pageable)
+                : productRepository.findByStatus(status, pageable);
+        Map<Long, Long> stockMap = inventoryService.getAvailableQuantities(
+                productPage.getContent().stream().map(Product::getId).toList());
         return productPage.map(p -> new ProductWithStock(p, stockMap.getOrDefault(p.getId(), 0L)));
     }
 
@@ -79,6 +96,13 @@ public class ProductService {
     public Product deactivateProduct(Long id) {
         Product product = getProductById(id);
         product.deactivate();
+        return productRepository.save(product);
+    }
+
+    @Transactional
+    public Product activateProduct(Long id) {
+        Product product = getProductById(id);
+        product.activate();
         return productRepository.save(product);
     }
 

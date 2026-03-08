@@ -135,4 +135,49 @@ class ProductServiceTest {
             }
         }
     }
+    @Test
+    void getInactiveProductsWithStock_INACTIVE만조회한다() {
+        Product inactive = createAndSaveProduct("inactive-product", 10000L);
+        inactive.deactivate();
+        productRepository.save(inactive);
+        addStock(inactive.getId(), 30L);
+
+        createAndSaveProduct("active-product", 20000L);
+
+        PageRequest pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
+        Page<ProductWithStock> result = productService.getInactiveProductsWithStock(null, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).product().getId()).isEqualTo(inactive.getId());
+        assertThat(result.getContent().get(0).quantityAvailable()).isEqualTo(30L);
+    }
+
+    @Test
+    void activateProduct_INACTIVE상품을ACTIVE로변경한다() {
+        Product product = createAndSaveProduct("inactive-product", 10000L);
+        product.deactivate();
+        productRepository.save(product);
+
+        Product result = productService.activateProduct(product.getId());
+
+        assertThat(result.getStatus()).isEqualTo(ProductStatus.ACTIVE);
+        assertThat(productRepository.findById(product.getId())).get().extracting(Product::getStatus)
+                .isEqualTo(ProductStatus.ACTIVE);
+    }
+
+    @Test
+    void getProductsWithStock_ALL필터_활성비활성모두조회한다() {
+        createAndSaveProduct("active-product", 10000L);
+        Product inactive = createAndSaveProduct("inactive-product", 20000L);
+        inactive.deactivate();
+        productRepository.save(inactive);
+
+        PageRequest pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
+        Page<ProductWithStock> result = productService.getProductsWithStock(null, pageable);
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent())
+                .extracting(pws -> pws.product().getStatus())
+                .contains(ProductStatus.ACTIVE, ProductStatus.INACTIVE);
+    }
 }

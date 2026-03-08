@@ -32,4 +32,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("name") String name,
             Pageable pageable
     );
+
+    @Query("""
+            SELECT p
+            FROM Product p
+            WHERE lower(p.name) LIKE concat('%', lower(:name), '%')
+            """)
+    Page<Product> findByNameContainingIgnoreCase(
+            @Param("name") String name,
+            Pageable pageable
+    );
 }
