@@ -1,7 +1,10 @@
 package com.minishop.project.minishop.common.config;
 
+import com.minishop.project.minishop.common.filter.IpRateLimitFilter;
 import com.minishop.project.minishop.common.filter.JwtAuthenticationFilter;
+import com.minishop.project.minishop.common.filter.UserRateLimitFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,6 +30,12 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Autowired(required = false)
+    private IpRateLimitFilter ipRateLimitFilter;
+
+    @Autowired(required = false)
+    private UserRateLimitFilter userRateLimitFilter;
 
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
     private String corsAllowedOrigins;
@@ -59,6 +68,13 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        if (ipRateLimitFilter != null) {
+            http.addFilterBefore(ipRateLimitFilter, JwtAuthenticationFilter.class);
+        }
+        if (userRateLimitFilter != null) {
+            http.addFilterAfter(userRateLimitFilter, JwtAuthenticationFilter.class);
+        }
 
         return http.build();
     }
