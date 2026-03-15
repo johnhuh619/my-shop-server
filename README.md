@@ -3,7 +3,7 @@
 결제 정합성, 재고 동시성, 장애 보상에 집중한 이커머스 풀스택 애플리케이션.
 
 > **Live Demo**
-> - Frontend: [Vercel](https://mini-shop-frontend.vercel.app) (React + TypeScript)
+> - Frontend: [Vercel](my-shop-server-sand.vercel.app) (React + TypeScript)
 > - Backend API: [GCP Cloud Run](https://minishop-asia-northeast1.run.app) (Spring Boot)
 >
 > *Toss Payments 테스트 모드로 실제 결제 흐름을 체험할 수 있습니다.*
