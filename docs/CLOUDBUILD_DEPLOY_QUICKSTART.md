@@ -64,6 +64,7 @@ gcloud iam service-accounts add-iam-policy-binding `
 - `REDIS_URL`
 - `JWT_SECRET`
 - `TOSS_SECRET_KEY`
+- `INTERNAL_JOBS_AUTH_KEY`
 
 등록 예시:
 
@@ -100,3 +101,8 @@ $URL = gcloud run services describe minishop --region asia-northeast1 --format="
 curl "$URL/actuator/health"
 ```
 
+---
+
+## Current Status
+
+최신 적용 상태와 남은 작업은 [CLOUD_RUN_CURRENT_STATUS.md](/C:/2025proj/mini-shop/docs/CLOUD_RUN_CURRENT_STATUS.md) 를 기준으로 확인한다.
