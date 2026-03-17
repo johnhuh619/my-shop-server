@@ -4,6 +4,7 @@ public enum ErrorCode {
     // Common
     INTERNAL_SERVER_ERROR("C001", "Internal server error"),
     INVALID_INPUT_VALUE("C002", "Invalid input value"),
+    UNAUTHORIZED_REQUEST("C003", "Unauthorized request"),
     RATE_LIMIT_EXCEEDED("RL001", "Too many requests. Please try again later"),
 
     // User

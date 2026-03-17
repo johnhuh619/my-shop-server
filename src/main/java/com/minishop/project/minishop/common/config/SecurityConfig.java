@@ -1,6 +1,7 @@
 package com.minishop.project.minishop.common.config;
 
 import com.minishop.project.minishop.common.filter.IpRateLimitFilter;
+import com.minishop.project.minishop.common.filter.InternalJobAuthFilter;
 import com.minishop.project.minishop.common.filter.JwtAuthenticationFilter;
 import com.minishop.project.minishop.common.filter.UserRateLimitFilter;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final InternalJobAuthFilter internalJobAuthFilter;
 
     @Autowired(required = false)
     private IpRateLimitFilter ipRateLimitFilter;
@@ -59,6 +61,7 @@ public class SecurityConfig {
                                 "/api/users/register",
                                 "/api/products",
                                 "/api/products/{id}",
+                                "/internal/**",
                                 "/h2-console/**",
                                 "/actuator/health",
                                 "/swagger-ui/**",
@@ -67,13 +70,14 @@ public class SecurityConfig {
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(internalJobAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         if (ipRateLimitFilter != null) {
-            http.addFilterBefore(ipRateLimitFilter, JwtAuthenticationFilter.class);
+            http.addFilterBefore(ipRateLimitFilter, UsernamePasswordAuthenticationFilter.class);
         }
         if (userRateLimitFilter != null) {
-            http.addFilterAfter(userRateLimitFilter, JwtAuthenticationFilter.class);
+            http.addFilterAfter(userRateLimitFilter, UsernamePasswordAuthenticationFilter.class);
         }
 
         return http.build();
