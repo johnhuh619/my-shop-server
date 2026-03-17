@@ -3,10 +3,15 @@ substitutions:
   _SERVICE: minishop
   _AR_REPOSITORY: cloud-run-source-deploy
   _IMAGE_NAME: minishop
+  _BUILD_SERVICE_ACCOUNT_NAME: minishop-builder
   _SERVICE_ACCOUNT_NAME: minishop-runner
   _TAG: latest
 
 timeout: 1200s
+serviceAccount: projects/$PROJECT_ID/serviceAccounts/${_BUILD_SERVICE_ACCOUNT_NAME}@$PROJECT_ID.iam.gserviceaccount.com
+
+options:
+  logging: CLOUD_LOGGING_ONLY
 
 steps:
   - id: Build image
@@ -38,7 +43,7 @@ steps:
       - --min-instances=0
       - --max-instances=2
       - --set-env-vars=SPRING_PROFILES_ACTIVE=prod
-      - --set-secrets=DB_URL=DB_URL:latest,DB_USER=DB_USER:latest,DB_PASSWORD=DB_PASSWORD:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,TOSS_SECRET_KEY=TOSS_SECRET_KEY:latest
+      - --set-secrets=DB_URL=DB_URL:latest,DB_USER=DB_USER:latest,DB_PASSWORD=DB_PASSWORD:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,TOSS_SECRET_KEY=TOSS_SECRET_KEY:latest,INTERNAL_JOBS_AUTH_KEY=INTERNAL_JOBS_AUTH_KEY:latest
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPOSITORY}/${_IMAGE_NAME}:${_TAG}
